@@ -1,0 +1,31 @@
+{
+  "name": "portejunes-backend",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "moleculer-runner --hot --repl services/*.service.js services/**/*.service.js",
+    "start": "moleculer-runner services/*.service.js services/**/*.service.js"
+  },
+  "dependencies": {
+    "@activitypods/app": "2.2.0",
+    "@polkadot/api": "^16.5.6",
+    "@polkadot/keyring": "^14.0.3",
+    "@polkadot/util-crypto": "^14.0.3",
+    "@semapps/auth": "1.1.2",
+    "@semapps/core": "1.1.2",
+    "@semapps/crypto": "1.1.2",
+    "@semapps/nodeinfo": "1.1.2",
+    "@semapps/notifications": "1.1.2",
+    "@semapps/ontologies": "1.1.2",
+    "@semapps/solid": "1.1.2",
+    "@semapps/triplestore": "1.1.2",
+    "dotenv-flow": "^3.2.0",
+    "ioredis": "^4.17.3",
+    "moleculer": "^0.14.35",
+    "moleculer-repl": "^0.6.6",
+    "url-join": "^4.0.1"
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  }
+}

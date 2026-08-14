@@ -1,0 +1,27 @@
+// Read all .env* files in the root folder and add them to process.env
+// See https://github.com/kerimdzhanov/dotenv-flow for more details
+require('dotenv-flow').config();
+
+module.exports = {
+  APP_NAME: process.env.SEMAPPS_APP_NAME,
+  APP_DESCRIPTION: process.env.SEMAPPS_APP_DESCRIPTION,
+  APP_LANG: process.env.SEMAPPS_APP_LANG,
+  HOME_URL: process.env.SEMAPPS_HOME_URL,
+  FRONT_URL: process.env.SEMAPPS_FRONT_URL,
+  SHAPE_REPOSITORY_URL: process.env.SEMAPPS_SHAPE_REPOSITORY_URL,
+  PORTEJUNES_SHAPE_REPOSITORY_URL: process.env.SEMAPPS_PORTEJUNES_SHAPE_REPOSITORY_URL,
+  PORT: process.env.SEMAPPS_PORT,
+  SPARQL_ENDPOINT: process.env.SEMAPPS_SPARQL_ENDPOINT,
+  MAIN_DATASET: process.env.SEMAPPS_MAIN_DATASET,
+  JENA_USER: process.env.SEMAPPS_JENA_USER,
+  JENA_PASSWORD: process.env.SEMAPPS_JENA_PASSWORD,
+  REDIS_CACHE_URL: process.env.SEMAPPS_REDIS_CACHE_URL,
+  QUEUE_SERVICE_URL: process.env.SEMAPPS_QUEUE_SERVICE_URL,
+  AUTH_ACCOUNTS_DATASET_NAME: process.env.SEMAPPS_AUTH_ACCOUNTS_DATASET_NAME,
+
+  // Duniter / Ğ1
+  DUNITER_NETWORK: process.env.SEMAPPS_DUNITER_NETWORK,
+  DUNITER_RPC_ENDPOINTS: (process.env.SEMAPPS_DUNITER_RPC_ENDPOINTS || '').split(',').filter(Boolean),
+  DUNITER_INDEXER_URL: process.env.SEMAPPS_DUNITER_INDEXER_URL,
+  DUNITER_SS58_FORMAT: Number(process.env.SEMAPPS_DUNITER_SS58_FORMAT || 4450)
+};

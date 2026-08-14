@@ -1,0 +1,102 @@
+import { Refine, Authenticated } from '@refinedev/core';
+import { useNotificationProvider, ThemedLayout, ErrorComponent, RefineThemes } from '@refinedev/antd';
+import routerProvider, { CatchAllNavigate, UnsavedChangesNotifier, DocumentTitleHandler } from '@refinedev/react-router';
+import { AntdAuthPage } from '@activitypods/refine-providers/antd-auth-page';
+import { BrowserRouter, Routes, Route, Outlet } from 'react-router';
+import { SendOutlined, QrcodeOutlined, HistoryOutlined, ContactsOutlined } from '@ant-design/icons';
+import { App as AntdApp, ConfigProvider } from 'antd';
+
+import '@ant-design/v5-patch-for-react-19';
+import '@refinedev/antd/dist/reset.css';
+
+import { authProvider, dataProvider } from './providers';
+import { DEFAULT_POD_PROVIDER } from './config/env';
+import { PayerPage } from './pages/PayerPage';
+import { RecevoirPage } from './pages/RecevoirPage';
+import { TransactionsPage } from './pages/TransactionsPage';
+import { ContactsPage } from './pages/ContactsPage';
+
+const App: React.FC = () => (
+  <BrowserRouter>
+    <ConfigProvider theme={RefineThemes.Blue}>
+      <AntdApp>
+        <Refine
+          authProvider={authProvider}
+          dataProvider={dataProvider}
+          routerProvider={routerProvider}
+          resources={[
+            {
+              name: 'pay',
+              list: '/',
+              meta: { label: 'Payer', icon: <SendOutlined /> }
+            },
+            {
+              name: 'receive',
+              list: '/receive',
+              meta: { label: 'Recevoir', icon: <QrcodeOutlined /> }
+            },
+            {
+              name: 'transactions',
+              list: '/transactions',
+              meta: { label: 'Opérations', icon: <HistoryOutlined /> }
+            },
+            {
+              name: 'contacts',
+              list: '/contacts',
+              meta: { label: 'Contacts', icon: <ContactsOutlined /> }
+            }
+          ]}
+          notificationProvider={useNotificationProvider}
+          options={{
+            syncWithLocation: true,
+            warnWhenUnsavedChanges: true,
+            disableTelemetry: true
+          }}
+        >
+          <Routes>
+            <Route
+              element={
+                <Authenticated key="authenticated-routes" fallback={<CatchAllNavigate to="/login" />}>
+                  <ThemedLayout>
+                    <Outlet />
+                  </ThemedLayout>
+                </Authenticated>
+              }
+            >
+              <Route index element={<PayerPage />} />
+              <Route path="/receive" element={<RecevoirPage />} />
+              <Route path="/transactions" element={<TransactionsPage />} />
+              <Route path="/contacts" element={<ContactsPage />} />
+            </Route>
+
+            {/*
+              Not wrapped in <Authenticated>. AntdAuthPage handles every stage (provider picker,
+              OAuth callback, app registration) based on URL search params, so this single route
+              doubles as the `redirectUri` authProvider() defaults to.
+            */}
+            <Route
+              path="/login"
+              element={<AntdAuthPage authProvider={authProvider} defaultPodProvider={DEFAULT_POD_PROVIDER} />}
+            />
+
+            <Route
+              element={
+                <Authenticated key="catch-all">
+                  <ThemedLayout>
+                    <Outlet />
+                  </ThemedLayout>
+                </Authenticated>
+              }
+            >
+              <Route path="*" element={<ErrorComponent />} />
+            </Route>
+          </Routes>
+          <UnsavedChangesNotifier />
+          <DocumentTitleHandler />
+        </Refine>
+      </AntdApp>
+    </ConfigProvider>
+  </BrowserRouter>
+);
+
+export default App;

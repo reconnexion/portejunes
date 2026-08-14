@@ -1,0 +1,58 @@
+services:
+  fuseki:
+    image: semapps/jena-fuseki-webacl
+    volumes:
+      - ./data/fuseki:/fuseki:z
+    ports:
+      - "3031:3030"
+    environment:
+      ADMIN_PASSWORD: admin
+
+  activitypods-backend:
+    image: activitypods/backend
+    depends_on:
+      - fuseki
+      - redis
+    restart: always
+    volumes:
+      - ./data/activitypods/logs:/app/backend/logs:z
+      - ./data/activitypods/jwt:/app/backend/jwt:z
+      - ./data/activitypods/uploads:/app/backend/uploads:z
+    environment:
+      SEMAPPS_JENA_PASSWORD: admin
+      SEMAPPS_APP_LANG: fr
+      SEMAPPS_SHAPE_REPOSITORY_URL: ${SHAPE_REPOSITORY_URL}
+      # Non-default ports: this dev stack runs alongside another project's ActivityPods stack
+      # (which already occupies 3000/3030/5000/6379) on the same machine.
+      SEMAPPS_PORT: 3001
+      SEMAPPS_HOME_URL: http://localhost:3001/
+      # The Pod-provider backend (unlike an ActivityPods *app* backend, which uses
+      # SEMAPPS_FRONT_URL) reads its own frontend's URL from SEMAPPS_FRONTEND_URL -- confirmed
+      # against pod-provider/backend/config/config.js in the activitypods monorepo source, after
+      # SEMAPPS_FRONT_URL alone left the OIDC login-interaction redirect pointing at the default
+      # (another project's Pod provider frontend also running locally on port 5000).
+      SEMAPPS_FRONTEND_URL: http://localhost:5001/
+      SEMAPPS_SPARQL_ENDPOINT: http://localhost:3031/
+      SEMAPPS_QUEUE_SERVICE_URL: redis://localhost:6380/1
+      SEMAPPS_REDIS_CACHE_URL: redis://localhost:6380/0
+    # Host networking so this Pod provider can reach the app backend (localhost:3011) and
+    # frontend (localhost:5173) running directly on the host during development.
+    network_mode: "host"
+
+  activitypods-frontend:
+    image: activitypods/frontend
+    depends_on:
+      - activitypods-backend
+    restart: always
+    ports:
+      - "5001:5000"
+    environment:
+      REACT_APP_CONFIG_URL: "http://localhost:3001/.well-known/config.js"
+
+  redis:
+    image: redis
+    ports:
+      - "6380:6379"
+    volumes:
+      - ./data/redis:/data:z
+    command: ["redis-server", "--appendonly", "yes"]
