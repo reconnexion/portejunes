@@ -14,15 +14,24 @@ function parsePaytoUri(value) {
   return { network: match[1], address: match[2] };
 }
 
-// The Pod provider's JSON-LD serialization doesn't reliably compact custom-namespace
-// *properties* even when the prefix is registered (unlike types, which do compact) -- confirmed
-// during e2e testing: a dereferenced activity's amount showed up as
-// "https://portejunes.example/ns/core#amount", not "g1:amount", despite `g1` being a valid,
-// registered prefix. Reading both forms here is a workaround for that, not a design choice.
+// The Pod provider's JSON-LD serialization doesn't reliably compact properties to the form you'd
+// expect, so this checks every form a property might come back as, not just the "natural" one:
+// - custom-namespace properties (g1:amount, g1:address) sometimes don't compact to the `g1:`
+//   prefix even though it's registered, and show up as the full IRI instead -- confirmed during
+//   e2e testing.
+// - standard AS2 properties (as:summary) go the OTHER way: the official AS2 JSON-LD context
+//   (https://www.w3.org/ns/activitystreams) defines `summary` as the preferred compacted term
+//   for that IRI, so it comes back as the *bare* term, never `as:summary` -- confirmed by
+//   `activity.target` a few lines below already being read bare, and directly verified against
+//   this service's own stored data via SPARQL (predicate is the full
+//   `.../activitystreams#summary` IRI; the compacted JSON-LD handed to this handler exposes that
+//   as bare `summary`). This was silently dropping every payment comment before it ever reached
+//   `duniterClient.transfer` -- `pick()` only checked the prefixed and full-IRI forms.
 const G1_NS = 'https://portejunes.example/ns/core#';
 const AS_NS = 'https://www.w3.org/ns/activitystreams#';
 function pick(obj, prefixed, ns) {
-  return obj?.[prefixed] ?? obj?.[ns + prefixed.split(':')[1]];
+  const bare = prefixed.split(':')[1];
+  return obj?.[prefixed] ?? obj?.[ns + bare] ?? obj?.[bare];
 }
 
 module.exports = {
@@ -45,6 +54,7 @@ module.exports = {
       // for why there's no separate transfer API to call here: this *is* the transfer.
       async onEmit(ctx, activity, actorUri) {
         const amount = pick(activity.object, 'g1:amount', G1_NS);
+        const comment = pick(activity.object, 'as:summary', AS_NS);
         const recipientWebId = activity.target;
         // Set instead of `target`/`to` when the recipient has no ActivityPub presence at all
         // (a plain Gecko/Cesium wallet, say) -- see PayerPage.tsx for the frontend side of this.
@@ -71,20 +81,15 @@ module.exports = {
 
           const senderWallet = await ctx.call('wallet.getOwn', { actorUri });
           const seed = pick(senderWallet, 'g1:seed', G1_NS);
-          const { txHash } = await duniterClient.transfer(seed, destinationAddress, amount);
+          const { txHash } = await duniterClient.transfer(seed, destinationAddress, amount, comment);
 
-          await ctx.call('pod-notifications.send', {
-            template: {
-              title: {
-                en: `Payment of ${(amount / 100).toFixed(2)} Ğ1 sent`,
-                fr: `Paiement de ${(amount / 100).toFixed(2)} Ğ1 envoyé`
-              }
-            },
-            activity,
-            context: activity.id,
-            recipientUri: actorUri
-          });
-
+          // No "payment sent" notification to the sender: every `pod-notifications.send` call
+          // becomes a real email (see mail-notifications.js in the Pod provider backend -- it
+          // auto-relays any apods:Notification landing in a user's inbox, unconditionally, once
+          // SMTP is configured). The sender already gets immediate feedback from the outbox
+          // POST succeeding and their balance updating; the useful notification -- to the
+          // person who didn't initiate anything and has no other way to know -- is the
+          // recipient's, below.
           this.logger.info(`Pay ${activity.id}: sent ${amount} centimes to ${destinationAddress} (${txHash})`);
         } catch (e) {
           this.logger.error(`Pay ${activity.id} failed: ${e.message}`);

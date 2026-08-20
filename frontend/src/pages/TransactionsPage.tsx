@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { List, Empty, Spin, Alert, Typography } from 'antd';
+import { List, Empty, Spin, Alert, Card, Typography } from 'antd';
 import { ArrowUpOutlined, ArrowDownOutlined } from '@ant-design/icons';
 
 import useWallet from '../hooks/useWallet';
@@ -33,13 +33,19 @@ export const TransactionsPage = () => {
     refetchInterval: 30_000
   });
 
-  if (wallet.isLoading || isLoading || directory.isLoading) return <Spin />;
+  if (wallet.isLoading || isLoading || directory.isLoading) {
+    return (
+      <Card title="Opérations" style={{ width: '100%', textAlign: 'center' }}>
+        <Spin />
+      </Card>
+    );
+  }
 
   // getHistory() never throws (returns [] on any failure) -- an empty list here is
   // indistinguishable from "the indexer is unreachable", see the plan's open risk on this.
   if (!history || history.length === 0) {
     return (
-      <>
+      <Card title="Opérations" style={{ width: '100%' }}>
         <Alert
           type="info"
           showIcon
@@ -48,33 +54,40 @@ export const TransactionsPage = () => {
           style={{ marginBottom: 16 }}
         />
         <Empty description="Aucune opération" />
-      </>
+      </Card>
     );
   }
 
   return (
-    <List
-      dataSource={history}
-      renderItem={tx => {
-        const received = tx.toId === wallet.address;
-        const counterpartyAddress = received ? tx.fromId : tx.toId;
-        const counterpartyIdentity = received ? tx.fromIdentity : tx.toIdentity;
-        const label = counterpartyLabel(counterpartyAddress, counterpartyIdentity, directory);
-        return (
-          <List.Item>
-            <List.Item.Meta
-              avatar={received ? <ArrowDownOutlined style={{ color: 'green' }} /> : <ArrowUpOutlined style={{ color: 'red' }} />}
-              title={`${received ? '+' : '-'}${(tx.amount / 100).toFixed(2)} Ğ1 ${received ? 'de' : 'à'} ${label}`}
-              description={
-                <>
-                  <Text type="secondary">{new Date(tx.timestamp).toLocaleString()}</Text>
-                  {tx.comment && <div>{tx.comment}</div>}
-                </>
-              }
-            />
-          </List.Item>
-        );
-      }}
-    />
+    <Card title="Opérations" style={{ width: '100%' }} styles={{ body: { padding: 0 } }}>
+      <List
+        dataSource={history}
+        style={{ padding: '0 24px' }}
+        renderItem={tx => {
+          const received = tx.toId === wallet.address;
+          const counterpartyAddress = received ? tx.fromId : tx.toId;
+          const counterpartyIdentity = received ? tx.fromIdentity : tx.toIdentity;
+          const label = counterpartyLabel(counterpartyAddress, counterpartyIdentity, directory);
+          return (
+            <List.Item>
+              <List.Item.Meta
+                avatar={received ? <ArrowDownOutlined style={{ color: 'green' }} /> : <ArrowUpOutlined style={{ color: 'red' }} />}
+                title={`${received ? '+' : '-'}${(tx.amount / 100).toFixed(2)} Ğ1 ${received ? 'de' : 'à'} ${label}`}
+                description={
+                  <>
+                    <Text type="secondary">{new Date(tx.timestamp).toLocaleString()}</Text>
+                    {tx.comment && (
+                      <div>
+                        <Text italic>« {tx.comment} »</Text>
+                      </div>
+                    )}
+                  </>
+                }
+              />
+            </List.Item>
+          );
+        }}
+      />
+    </Card>
   );
 };

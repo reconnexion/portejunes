@@ -1,0 +1,78 @@
+body {
+  margin: 0;
+  min-height: 100vh;
+  background-color: #f4f7f2;
+}
+
+a {
+  color: #3c8c40;
+  text-decoration: none;
+}
+
+.pj-appbar-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 20px;
+  font-weight: 600;
+  color: #fff !important;
+}
+
+/* Light green highlight fading into the app's forest green, instead of a flat fill. */
+.pj-header-gradient {
+  background-image: radial-gradient(circle at 50% 3em, #8bc34a 0%, #2e7d32 100%);
+}
+
+/* Two-column page layout (nav + wallet card on the left, page content on the right) -- see
+   PageLayout.tsx. Below the breakpoint this switches to a single stacked column with the nav
+   moved into a fixed bottom tab bar instead (see .pj-nav-mobile), like a native mobile app. */
+.pj-layout {
+  display: flex;
+  gap: 24px;
+  align-items: flex-start;
+  padding: 32px 16px;
+}
+
+.pj-sidebar-column {
+  width: 260px;
+  flex-shrink: 0;
+}
+
+.pj-content-column {
+  flex: 1 1 480px;
+  max-width: 640px;
+}
+
+.pj-nav-mobile {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .pj-nav-desktop {
+    display: none;
+  }
+
+  .pj-nav-mobile {
+    display: flex;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: #fff;
+    border-top: 1px solid rgba(0, 0, 0, 0.08);
+    z-index: 100;
+    padding: 4px 8px calc(4px + env(safe-area-inset-bottom));
+  }
+
+  .pj-layout {
+    flex-direction: column;
+    padding-top: 16px;
+    padding-bottom: 76px;
+  }
+
+  .pj-sidebar-column,
+  .pj-content-column {
+    width: 100%;
+    max-width: 100%;
+  }
+}

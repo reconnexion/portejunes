@@ -32,6 +32,7 @@ module.exports = {
         },
         'apods:ReadOutbox',
         'apods:PostOutbox',
+        'apods:ReadInbox',
         'apods:UpdateWebId',
         'apods:QuerySparqlEndpoint'
       ],

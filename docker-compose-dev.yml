@@ -13,6 +13,7 @@ services:
     depends_on:
       - fuseki
       - redis
+      - mailcatcher
     restart: always
     volumes:
       - ./data/activitypods/logs:/app/backend/logs:z
@@ -35,6 +36,16 @@ services:
       SEMAPPS_SPARQL_ENDPOINT: http://localhost:3031/
       SEMAPPS_QUEUE_SERVICE_URL: redis://localhost:6380/1
       SEMAPPS_REDIS_CACHE_URL: redis://localhost:6380/0
+      # Without this, OIDC session storage falls back to the default redis://localhost:6379,
+      # which doesn't exist on this host (redis is remapped to 6380) -- the login interaction
+      # then hangs forever with no visible error (confirmed against
+      # pod-provider/backend/config/config.js's REDIS_OIDC_PROVIDER_URL key).
+      SEMAPPS_REDIS_OIDC_PROVIDER_URL: redis://localhost:6380/2
+      # Non-default port (1026, not mailcatcher's usual 1025) for the same reason as the other
+      # services above -- host networking means this shares the host's port space with any other
+      # project's dev stack.
+      SEMAPPS_SMTP_HOST: localhost
+      SEMAPPS_SMTP_PORT: 1026
     # Host networking so this Pod provider can reach the app backend (localhost:3011) and
     # frontend (localhost:5173) running directly on the host during development.
     network_mode: "host"
@@ -56,3 +67,10 @@ services:
     volumes:
       - ./data/redis:/data:z
     command: ["redis-server", "--appendonly", "yes"]
+
+  mailcatcher:
+    image: dockage/mailcatcher:0.7.1
+    ports:
+      - "1081:1080"
+      - "1026:1025"
+    restart: on-failure

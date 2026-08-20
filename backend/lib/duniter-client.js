@@ -69,16 +69,27 @@ async function getExistentialDeposit() {
   return api.consts.balances.existentialDeposit.toNumber();
 }
 
-/** Signs and submits a transferKeepAlive from the wallet identified by `seed` to `toAddress`.
- *  Resolves once the extrinsic is included in a block; throws on a dispatch error (including
- *  the recipient not meeting the existential deposit, or the sender being left below it). */
-async function transfer(seed, toAddress, amountCentimes) {
+/** Signs and submits a transferKeepAlive from the wallet identified by `seed` to `toAddress`,
+ *  optionally with a `comment`. Resolves once the extrinsic is included in a block; throws on a
+ *  dispatch error (including the recipient not meeting the existential deposit, or the sender
+ *  being left below it).
+ *
+ *  A comment can't be attached to a plain `transferKeepAlive` -- there's no memo field on a
+ *  Substrate balance transfer. The chain indexer (duniter-squid's `data_handler.ts`) only links
+ *  a comment to a transfer when a `system.remarkWithEvent` call sits in the *same extrinsic* as
+ *  the `balances.transfer` event (it walks `event.extrinsic.events` looking for one) -- so a
+ *  comment has to be submitted as a `utility.batchAll([transferKeepAlive, remarkWithEvent])`,
+ *  not as a separate call. `remark` (no event) wouldn't work either: with no event, the indexer
+ *  has nothing to pick up at all. */
+async function transfer(seed, toAddress, amountCentimes, comment) {
   const api = await getApi();
   const pair = getKeyring().addFromMnemonic(seed);
 
+  const transferCall = api.tx.balances.transferKeepAlive(toAddress, amountCentimes);
+  const call = comment ? api.tx.utility.batchAll([transferCall, api.tx.system.remarkWithEvent(comment)]) : transferCall;
+
   return new Promise((resolve, reject) => {
-    api.tx.balances
-      .transferKeepAlive(toAddress, amountCentimes)
+    call
       .signAndSend(pair, ({ status, dispatchError, txHash }) => {
         if (dispatchError) {
           if (dispatchError.isModule) {

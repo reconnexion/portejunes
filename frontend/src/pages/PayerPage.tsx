@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useLocation } from 'react-router';
-import { Card, InputNumber, Input, Button, Space, Typography, App as AntdApp, Statistic, Alert, Tag } from 'antd';
+import { Card, InputNumber, Input, Button, Space, Typography, App as AntdApp, Tag } from 'antd';
 import { SendOutlined } from '@ant-design/icons';
 
 import useWallet from '../hooks/useWallet';
@@ -104,7 +104,11 @@ export const PayerPage = () => {
               // No target/to: nobody to deliver to -- the recipient has no ActivityPub inbox.
             }
       );
-      message.success('Paiement envoyé — vous recevrez une notification une fois le virement confirmé.');
+      // Not "vous recevrez une notification" -- pay-activity.service.js does post one via
+      // pod-notifications.send, but that only lands as an ActivityPub Note in the Pod inbox,
+      // and nothing (neither this app nor the Pod provider's own frontend) displays that inbox
+      // yet. The balance in the sidebar updating is the only visible confirmation right now.
+      message.success('Paiement envoyé — le virement est en cours de traitement, le solde se mettra à jour une fois confirmé.');
       setRecipient(null);
       setAmount(null);
       setComment('');
@@ -116,27 +120,7 @@ export const PayerPage = () => {
   };
 
   return (
-    <Space direction="vertical" size="large" style={{ width: '100%', maxWidth: 480 }}>
-      <Card>
-        {wallet.error && wallet.balance === null ? (
-          <Alert type="error" showIcon message="Impossible de récupérer le solde" description={wallet.error} />
-        ) : (
-          <Statistic
-            title="Portefeuille Ğ1"
-            value={wallet.balance !== null ? wallet.balance / 100 : undefined}
-            precision={2}
-            suffix="Ğ1"
-            loading={wallet.isLoading || wallet.balance === null}
-          />
-        )}
-        {wallet.address && (
-          <Text type="secondary" copyable={{ text: wallet.address }}>
-            {wallet.address.slice(0, 8)}…{wallet.address.slice(-6)}
-          </Text>
-        )}
-      </Card>
-
-      <Card title="Envoyer des Ğ1">
+    <Card title="Envoyer des Ğ1" style={{ width: '100%' }}>
         {!recipient ? (
           <Space direction="vertical" style={{ width: '100%' }}>
             <QrScanButton onScan={resolveRecipientInput} />
@@ -200,8 +184,7 @@ export const PayerPage = () => {
               Envoyer
             </Button>
           </Space>
-        )}
-      </Card>
-    </Space>
+      )}
+    </Card>
   );
 };

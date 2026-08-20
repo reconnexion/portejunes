@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useList } from '@refinedev/core';
 import { fetchJson } from '@activitypods/refine-providers/utils';
 
@@ -27,8 +28,7 @@ const useWallet = () => {
 
   const [address, setAddress] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
-  const [balance, setBalance] = useState<number | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [creationError, setCreationError] = useState<string | null>(null);
 
   // Guards against creating more than one wallet per session. Needed because the imperative
   // `dataProvider.create()` call below doesn't go through Refine's `useList` cache, so
@@ -81,7 +81,7 @@ const useWallet = () => {
           publishCesiumName(seed, handle).catch(e => console.error('Cesium+ profile publish failed:', e));
         }
       } catch (e: any) {
-        setError(e.message);
+        setCreationError(e.message);
         attempted.current = false; // allow retrying on next render if creation genuinely failed
       } finally {
         setCreating(false);
@@ -104,23 +104,24 @@ const useWallet = () => {
     publishCesiumName(seed, handle).catch(e => console.error('Cesium+ profile publish failed:', e));
   }, [result?.data, ownActor]);
 
-  useEffect(() => {
-    if (!address) return;
-    let cancelled = false;
-    getBalance(address)
-      .then(b => !cancelled && setBalance(b))
-      .catch(e => !cancelled && setError(e.message));
-    return () => {
-      cancelled = true;
-    };
-  }, [address]);
+  // Polled, not fetched once: a plain one-shot fetch here left the balance stuck at whatever it
+  // was when the wallet first loaded, so the "your balance will update once confirmed" message
+  // shown after sending a payment (see PayerPage.tsx) was never actually true. 8s is a
+  // reasonably snappy compromise for "did my payment land" without hammering the public RPC
+  // nodes on every render.
+  const balanceQuery = useQuery({
+    queryKey: ['balance', address],
+    queryFn: () => getBalance(address!),
+    enabled: !!address,
+    refetchInterval: 8000
+  });
 
   return {
     address,
     tipjar: address ? parsePaytoUri(formatPaytoUri(DUNITER_NETWORK, address)) : null,
-    balance,
+    balance: balanceQuery.data ?? null,
     isLoading: query.isLoading || creating,
-    error
+    error: creationError || balanceQuery.error?.message || null
   };
 };
 
