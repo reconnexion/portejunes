@@ -1,9 +1,9 @@
 import { DUNITER_RPC_ENDPOINTS, DUNITER_INDEXER_URL, DUNITER_SS58_FORMAT, DUNITER_NETWORK } from '../config/env';
 
-// Browser-side counterpart of backend/lib/duniter-client.js -- same ed25519/ss58-4450 recipe,
-// validated against a real chain in the plan's step-1 spike. Used for reads only (balance,
-// history, address derivation for display); the actual signing/transfer happens server-side in
-// pay-activity.service.js, since only the backend has access to the stored g1:WalletSecret.
+// Same ed25519/ss58-4450 recipe as the backend's (now-removed) server-side duniter-client.js,
+// validated against a real chain in the plan's step-1 spike. Everything runs client-side,
+// including signing (`transfer`, below) -- see useWallet.ts's `pay()` and
+// pay-activity.service.js for why the transfer moved here instead of staying server-side.
 
 let apiPromise: Promise<any> | undefined;
 
@@ -84,6 +84,49 @@ export async function getBalance(address: string): Promise<number> {
 export async function getExistentialDeposit(): Promise<number> {
   const api = await getApi();
   return api.consts.balances.existentialDeposit.toNumber();
+}
+
+/** Signs and submits a transferKeepAlive from the wallet identified by `seed` to `toAddress`,
+ *  optionally with a `comment`. Resolves once the extrinsic is included in a block; throws on a
+ *  dispatch error (including the recipient not meeting the existential deposit, or the sender
+ *  being left below it).
+ *
+ *  Runs client-side, in the browser -- not on the backend. See pay-activity.service.js for why:
+ *  a server-side transfer, triggered as a side effect of any `Offer{g1:Payment}` activity landing
+ *  in the outbox, meant any app with generic outbox-post rights could move real money with no
+ *  payment-specific consent gate. Signing here means the spend only ever happens through this
+ *  app's own "Envoyer" button.
+ *
+ *  A comment can't be attached to a plain `transferKeepAlive` -- there's no memo field on a
+ *  Substrate balance transfer. The chain indexer (duniter-squid's `data_handler.ts`) only links a
+ *  comment to a transfer when a `system.remarkWithEvent` call sits in the *same extrinsic* as the
+ *  `balances.transfer` event, so a comment has to be submitted as a
+ *  `utility.batchAll([transferKeepAlive, remarkWithEvent])`, not as a separate call. Mirrors
+ *  backend/lib/duniter-client.js's (now-removed) server-side version exactly. */
+export async function transfer(seed: string, toAddress: string, amountCentimes: number, comment?: string): Promise<{ txHash: string; blockHash: string }> {
+  const api = await getApi();
+  const keyring = await getKeyring();
+  const pair = keyring.addFromMnemonic(seed);
+
+  const transferCall = api.tx.balances.transferKeepAlive(toAddress, amountCentimes);
+  const call = comment ? api.tx.utility.batchAll([transferCall, api.tx.system.remarkWithEvent(comment)]) : transferCall;
+
+  return new Promise((resolve, reject) => {
+    call
+      .signAndSend(pair, ({ status, dispatchError, txHash }: any) => {
+        if (dispatchError) {
+          if (dispatchError.isModule) {
+            const decoded = api.registry.findMetaError(dispatchError.asModule);
+            reject(new Error(`${decoded.section}.${decoded.name}: ${decoded.docs.join(' ')}`));
+          } else {
+            reject(new Error(dispatchError.toString()));
+          }
+        } else if (status.isInBlock) {
+          resolve({ txHash: txHash.toString(), blockHash: status.asInBlock.toString() });
+        }
+      })
+      .catch(reject);
+  });
 }
 
 // Default Cesium+ Pod instance for all networks, per Gecko's own bundled config

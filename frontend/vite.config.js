@@ -10,7 +10,7 @@ export default defineConfig({
             name: "no-cache-app-description",
             configureServer: function (server) {
                 server.middlewares.use(function (req, res, next) {
-                    if (req.url && /^\/(app|access-need-[\w-]+|shapes\/|shapetrees\/)/.test(req.url)) {
+                    if (req.url && /^\/(app|access-need-[\w-]+)/.test(req.url)) {
                         res.setHeader("Cache-Control", "no-store");
                     }
                     next();
@@ -21,7 +21,7 @@ export default defineConfig({
     // Pinned: public/app.json and the other public/*.json files it references hardcode this
     // port in their URLs. If you change it, update those files' URLs to match.
     server: {
-        port: 5173,
+        port: 4004,
         strictPort: true,
     },
 });

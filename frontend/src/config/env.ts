@@ -12,10 +12,9 @@ export const CLIENT_ID = import.meta.env.VITE_CLIENT_ID as string;
 /** Standard shape trees (as:Profile, ...), published on shapes.activitypods.org. */
 export const SHAPE_REPOSITORY_URL = (import.meta.env.VITE_SHAPE_REPOSITORY_URL as string) || 'https://shapes.activitypods.org/';
 
-/** This app's own shape trees (g1:WalletSecret), served as static files by this frontend
- *  (see public/shapes, public/shapetrees) -- there's no dedicated shape repository server. */
-export const PORTEJUNES_SHAPE_REPOSITORY_URL =
-  (import.meta.env.VITE_PORTEJUNES_SHAPE_REPOSITORY_URL as string) || window.location.origin + '/';
+/** This app's own shape trees (g1:WalletSecret), served by docker-compose-shapes.yml (`make
+ *  shapes`) -- not by the backend or this frontend, see backend/.env for why. */
+export const PORTEJUNES_SHAPE_REPOSITORY_URL = import.meta.env.VITE_PORTEJUNES_SHAPE_REPOSITORY_URL as string;
 
 /** When set, the login page offers this single Pod provider instead of the public list. */
 export const DEFAULT_POD_PROVIDER = import.meta.env.VITE_POD_PROVIDER_URL as string | undefined;

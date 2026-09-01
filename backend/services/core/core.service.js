@@ -4,8 +4,12 @@ const { apods, notify, interop, oidc } = require('@semapps/ontologies');
 const CONFIG = require('../../config/config');
 
 // Ğ1 (June, Duniter's libre currency) vocabulary used by this app.
-// Not published on shapes.activitypods.org (this app hosts its own shapetree, see
-// services/shapes.service.js) since it's specific to PorteJunes, not a shared ActivityPods type.
+// Not published on shapes.activitypods.org (this app hosts its own shapetree instead, see
+// shapes/dist and docker-compose-shapes.yml) since it's specific to PorteJunes, not a shared
+// ActivityPods type. It's served from its own dedicated origin, not this backend's -- app.service's
+// access-need registration dereferences shapeTreeUri through ldp.remote.get, which refuses any
+// resourceUri under this app's own baseUrl (see @semapps/ldp's isRemote action) to keep apps from
+// self-referencing their own ACL-protected resources through the anonymous network-fetch path.
 const g1 = {
   prefix: 'g1',
   namespace: 'https://portejunes.example/ns/core#',

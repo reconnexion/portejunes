@@ -46,8 +46,8 @@ services:
       # project's dev stack.
       SEMAPPS_SMTP_HOST: localhost
       SEMAPPS_SMTP_PORT: 1026
-    # Host networking so this Pod provider can reach the app backend (localhost:3011) and
-    # frontend (localhost:5173) running directly on the host during development.
+    # Host networking so this Pod provider can reach the app backend (localhost:3004) and
+    # frontend (localhost:4004) running directly on the host during development.
     network_mode: "host"
 
   activitypods-frontend:

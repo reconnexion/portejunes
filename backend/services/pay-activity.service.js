@@ -1,18 +1,4 @@
 const { PodActivitiesHandlerMixin } = require('@activitypods/app');
-const duniterClient = require('../lib/duniter-client');
-
-// Parses a `payto://g1/<address>` or `payto://g1-test/<address>` URI (see the plan's data model
-// section for why `foaf:tipjar` holds this instead of a dereferenceable resource). `value` may
-// be a bare string, a JSON-LD node reference (`{ id: "payto://..." }`), or an array of either
-// (the Pod provider serializes `@id`-typed properties as node objects, not plain strings --
-// confirmed during e2e testing, where `actor['foaf:tipjar']` was `{ id: 'payto://...' }`).
-function parsePaytoUri(value) {
-  const first = Array.isArray(value) ? value[0] : value;
-  const uri = typeof first === 'string' ? first : first?.id;
-  const match = /^payto:\/\/(g1|g1-test)\/(.+)$/.exec(uri || '');
-  if (!match) return null;
-  return { network: match[1], address: match[2] };
-}
 
 // The Pod provider's JSON-LD serialization doesn't reliably compact properties to the form you'd
 // expect, so this checks every form a property might come back as, not just the "natural" one:
@@ -25,8 +11,7 @@ function parsePaytoUri(value) {
 //   `activity.target` a few lines below already being read bare, and directly verified against
 //   this service's own stored data via SPARQL (predicate is the full
 //   `.../activitystreams#summary` IRI; the compacted JSON-LD handed to this handler exposes that
-//   as bare `summary`). This was silently dropping every payment comment before it ever reached
-//   `duniterClient.transfer` -- `pick()` only checked the prefixed and full-IRI forms.
+//   as bare `summary`).
 const G1_NS = 'https://portejunes.example/ns/core#';
 const AS_NS = 'https://www.w3.org/ns/activitystreams#';
 function pick(obj, prefixed, ns) {
@@ -37,7 +22,6 @@ function pick(obj, prefixed, ns) {
 module.exports = {
   name: 'pay-activity',
   mixins: [PodActivitiesHandlerMixin],
-  dependencies: ['wallet'],
   activities: {
     // Wraps a `g1:Payment` custom OBJECT inside a standard AS2 `Offer` activity, rather than
     // inventing a new top-level `Pay` ACTIVITY type. This isn't a semantic preference -- e2e
@@ -49,67 +33,22 @@ module.exports = {
     pay: {
       match: { type: 'Offer', object: { type: 'g1:Payment' } },
 
-      // Fires when the sender's own Pod records the `Offer` activity in their outbox. This is
-      // where the actual Ğ1 transfer happens -- see the plan's "Important correction" section
-      // for why there's no separate transfer API to call here: this *is* the transfer.
-      async onEmit(ctx, activity, actorUri) {
-        const amount = pick(activity.object, 'g1:amount', G1_NS);
-        const comment = pick(activity.object, 'as:summary', AS_NS);
-        const recipientWebId = activity.target;
-        // Set instead of `target`/`to` when the recipient has no ActivityPub presence at all
-        // (a plain Gecko/Cesium wallet, say) -- see PayerPage.tsx for the frontend side of this.
-        const rawAddress = pick(activity.object, 'g1:address', G1_NS);
-
-        try {
-          if (!Number.isInteger(amount) || amount <= 0) {
-            throw new Error(`Invalid g1:amount: ${amount}`);
-          }
-
-          let destinationAddress;
-          if (recipientWebId) {
-            const recipientActor = await ctx.call('activitypub.actor.get', { actorUri: recipientWebId });
-            const recipientTipjar = parsePaytoUri(recipientActor?.['foaf:tipjar']);
-            if (!recipientTipjar) {
-              throw new Error(`${recipientWebId} has no foaf:tipjar (no Ğ1 wallet)`);
-            }
-            destinationAddress = recipientTipjar.address;
-          } else if (rawAddress) {
-            destinationAddress = rawAddress;
-          } else {
-            throw new Error('Pay activity has neither a target WebID nor a g1:address');
-          }
-
-          const senderWallet = await ctx.call('wallet.getOwn', { actorUri });
-          const seed = pick(senderWallet, 'g1:seed', G1_NS);
-          const { txHash } = await duniterClient.transfer(seed, destinationAddress, amount, comment);
-
-          // No "payment sent" notification to the sender: every `pod-notifications.send` call
-          // becomes a real email (see mail-notifications.js in the Pod provider backend -- it
-          // auto-relays any apods:Notification landing in a user's inbox, unconditionally, once
-          // SMTP is configured). The sender already gets immediate feedback from the outbox
-          // POST succeeding and their balance updating; the useful notification -- to the
-          // person who didn't initiate anything and has no other way to know -- is the
-          // recipient's, below.
-          this.logger.info(`Pay ${activity.id}: sent ${amount} centimes to ${destinationAddress} (${txHash})`);
-        } catch (e) {
-          this.logger.error(`Pay ${activity.id} failed: ${e.message}`);
-          await ctx.call('pod-notifications.send', {
-            template: {
-              title: {
-                en: `Payment failed: ${e.message}`,
-                fr: `Échec du paiement : ${e.message}`
-              }
-            },
-            activity,
-            context: activity.id,
-            recipientUri: actorUri
-          });
-        }
-      },
+      // Deliberately no `onEmit`: earlier, this is where the actual Ğ1 transfer happened, signed
+      // server-side with the sender's stored wallet secret, as a side effect of ANY `Offer{g1:
+      // Payment}` activity landing in the sender's own outbox. That meant any app holding the
+      // (common, broad) `apods:PostOutbox` access need could move real money by posting one --
+      // there was no payment-specific consent gate, just a generic ActivityPub permission.
+      // The transfer now happens client-side in this app's own frontend (see PayerPage.tsx),
+      // signed and broadcast to the chain directly, *before* this activity is posted at all --
+      // only PorteJunes' own UI ever touches the wallet secret to sign a spend. This activity is
+      // now purely a receipt/notification, posted after the fact, and only `onReceive` (below)
+      // does anything with it. Another RSU app wanting to let a user pay someone doesn't post
+      // this activity itself -- it redirects to PorteJunes with the recipient/amount preselected
+      // (see PayerPage.tsx's `to`/`amount` query params), so the actual spend still only ever
+      // happens through this app's own consent screen.
 
       // Fires when the recipient's Pod receives the `Offer` activity in their inbox -- purely a
-      // notification, the money has already moved on-chain by the time this runs (see the plan:
-      // "Pay is more of a notification").
+      // notification; the money already moved on-chain, client-side, before this was even posted.
       async onReceive(ctx, activity, actorUri) {
         const amount = pick(activity.object, 'g1:amount', G1_NS);
         const comment = pick(activity.object, 'as:summary', AS_NS);

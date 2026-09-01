@@ -1,15 +1,20 @@
-import { useState } from 'react';
-import { useLocation } from 'react-router';
+import { useEffect, useRef, useState } from 'react';
+import { useLocation, useSearchParams } from 'react-router';
+import { useList } from '@refinedev/core';
 import { Card, InputNumber, Input, Button, Space, Typography, App as AntdApp, Tag } from 'antd';
 import { SendOutlined } from '@ant-design/icons';
+import { fetchJson } from '@activitypods/refine-providers/utils';
 
+import { authProvider } from '../providers';
 import useWallet from '../hooks/useWallet';
 import useOutbox from '../hooks/useOutbox';
 import useOwnActor from '../hooks/useOwnActor';
 import { isValidAddress } from '../hooks/useDuniter';
 import { parseG1Uri } from '../utils/g1Uri';
+import { parsePaytoUri } from '../utils/payto';
 import WalletContactPicker from '../components/WalletContactPicker';
 import QrScanButton from '../components/QrScanButton';
+import type { ProfileRecord } from '../types';
 
 const { Text } = Typography;
 
@@ -26,6 +31,13 @@ export const PayerPage = () => {
   const outbox = useOutbox();
   const { data: ownActor } = useOwnActor();
   const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
+  // Same query WalletContactPicker itself makes (identical params, so Refine/React Query dedupe
+  // it rather than firing a second request) -- used below to show a contact's actual name instead
+  // of their raw WebID, for a WebID that arrives as plain text: pasted, scanned, or via the
+  // `?to=` deep link (see below), none of which come with a name attached the way picking someone
+  // from WalletContactPicker's own list does.
+  const { result: profilesResult, query: profilesQuery } = useList<ProfileRecord>({ resource: 'profile', pagination: { pageSize: 200 } });
 
   // Set when navigating here from ContactsPage after picking a recipient there.
   const preselected = (location.state as { recipient?: { webId: string; name: string } } | null)?.recipient;
@@ -50,7 +62,8 @@ export const PayerPage = () => {
         message.error('Vous ne pouvez pas vous payer vous-même.');
         return;
       }
-      setRecipient({ kind: 'contact', webId: trimmed, name: trimmed });
+      const profile = profilesResult.data.find(p => p.describes === trimmed);
+      setRecipient({ kind: 'contact', webId: trimmed, name: profile?.['vcard:given-name'] || trimmed });
       return;
     }
 
@@ -73,6 +86,36 @@ export const PayerPage = () => {
     message.error("Ce code ne correspond ni à un contact PorteJunes (WebID) ni à une adresse Ğ1 valide.");
   };
 
+  // Deep-link handoff from another Réseau Social Universel app: `?to=<WebID|g1-address|g1://
+  // URI>&amount=<Ğ1>&comment=<text>`. Since the actual spend only ever happens through this app's
+  // own "Envoyer" button (see pay-activity.service.js for why), another app can't trigger a
+  // payment itself -- it can only bring the user here with the recipient/amount preselected, one
+  // click away. Consumed once, reusing `resolveRecipientInput`'s own validation -- deferred until
+  // `profilesResult` has loaded so a WebID resolves to the contact's actual name (see above)
+  // rather than briefly falling back to the raw WebID because the profile list wasn't ready yet.
+  const deepLinkHandled = useRef(false);
+  useEffect(() => {
+    const to = searchParams.get('to');
+    if (!to || deepLinkHandled.current || profilesQuery.isLoading) return;
+    deepLinkHandled.current = true;
+    resolveRecipientInput(to).then(() => {
+      const amt = searchParams.get('amount');
+      if (amt && Number.isFinite(Number(amt))) setAmount(Number(amt));
+      const c = searchParams.get('comment');
+      if (c) setComment(c);
+    });
+    setSearchParams(
+      params => {
+        params.delete('to');
+        params.delete('amount');
+        params.delete('comment');
+        return params;
+      },
+      { replace: true }
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profilesQuery.isLoading]);
+
   const maxSendable = wallet.balance !== null ? wallet.balance / 100 : null;
 
   const handleSend = async () => {
@@ -80,35 +123,54 @@ export const PayerPage = () => {
     setSending(true);
     try {
       const amountCentimes = Math.round(amount * 100);
+
+      // The actual Ğ1 transfer happens here, client-side, signed with this app's own wallet
+      // secret -- not as a side effect of posting the `Offer` below (see pay-activity.service.js
+      // for why: that used to let any app with generic outbox-post rights move real money, with
+      // no payment-specific consent). By the time `outbox.post` runs, the money has already
+      // moved; the activity below is purely a receipt/notification for the recipient.
+      let destinationAddress: string;
+      if (recipient.kind === 'address') {
+        destinationAddress = recipient.address;
+      } else {
+        const session = authProvider.getSession();
+        const { json: recipientActor } = await fetchJson(recipient.webId, {}, session?.token);
+        const recipientTipjar = parsePaytoUri(recipientActor['foaf:tipjar']);
+        if (!recipientTipjar) throw new Error(`${recipient.name} n'a pas encore de portefeuille Ğ1.`);
+        destinationAddress = recipientTipjar.address;
+      }
+      await wallet.pay(destinationAddress, amountCentimes, comment || undefined);
+
       // A standard AS2 `Offer` wrapping a custom `g1:Payment` object, not a custom `Pay`
       // activity type -- see pay-activity.service.js for why (a brand-new top-level activity
       // type doesn't survive cross-Pod JSON-LD serialization; a custom *object* type does).
-      await outbox.post(
-        recipient.kind === 'contact'
-          ? {
-              type: 'Offer',
-              actor: outbox.owner,
-              object: { type: 'g1:Payment', 'g1:amount': amountCentimes, 'as:summary': comment || undefined },
-              target: recipient.webId,
-              to: recipient.webId
-            }
-          : {
-              type: 'Offer',
-              actor: outbox.owner,
-              object: {
-                type: 'g1:Payment',
-                'g1:amount': amountCentimes,
-                'as:summary': comment || undefined,
-                'g1:address': recipient.address
+      // Best-effort: the transfer already succeeded above, so a failure here (e.g. the
+      // recipient's inbox being briefly unreachable) shouldn't be reported as a payment failure.
+      outbox
+        .post(
+          recipient.kind === 'contact'
+            ? {
+                type: 'Offer',
+                actor: outbox.owner,
+                object: { type: 'g1:Payment', 'g1:amount': amountCentimes, 'as:summary': comment || undefined },
+                target: recipient.webId,
+                to: recipient.webId
               }
-              // No target/to: nobody to deliver to -- the recipient has no ActivityPub inbox.
-            }
-      );
-      // Not "vous recevrez une notification" -- pay-activity.service.js does post one via
-      // pod-notifications.send, but that only lands as an ActivityPub Note in the Pod inbox,
-      // and nothing (neither this app nor the Pod provider's own frontend) displays that inbox
-      // yet. The balance in the sidebar updating is the only visible confirmation right now.
-      message.success('Paiement envoyé — le virement est en cours de traitement, le solde se mettra à jour une fois confirmé.');
+            : {
+                type: 'Offer',
+                actor: outbox.owner,
+                object: {
+                  type: 'g1:Payment',
+                  'g1:amount': amountCentimes,
+                  'as:summary': comment || undefined,
+                  'g1:address': recipient.address
+                }
+                // No target/to: nobody to deliver to -- the recipient has no ActivityPub inbox.
+              }
+        )
+        .catch(e => console.error('Could not post the payment notification activity:', e));
+
+      message.success('Paiement envoyé et confirmé sur la chaîne.');
       setRecipient(null);
       setAmount(null);
       setComment('');

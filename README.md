@@ -26,15 +26,20 @@ Pas encore testé de bout en bout avec deux vrais comptes Pod.
 # Terminal 1 -- infrastructure (Fuseki, Redis, un Pod provider ActivityPods de test)
 docker compose -f docker-compose-dev.yml up
 
-# Terminal 2 -- backend de l'app (port 3011)
+# Terminal 2 -- shapetree de cette app (g1:WalletSecret), port 3005 -- requis pour que le backend
+# démarre : app.service enregistre ses access needs en allant chercher ce shapetree, et ça échoue
+# tant qu'il n'est pas servi (voir "Structure" plus bas pour le pourquoi).
+make shapes
+
+# Terminal 3 -- backend de l'app (port 3004)
 cd backend && yarn install && yarn dev
 
-# Terminal 3 -- frontend (port 5173)
+# Terminal 4 -- frontend (port 4004)
 cd frontend && yarn install && yarn dev
 ```
 
 Créez un compte sur le Pod provider de test (http://localhost:5000), puis ouvrez
-http://localhost:5173, connectez-vous, et autorisez l'application.
+http://localhost:4004, connectez-vous, et autorisez l'application.
 
 Par défaut, tout pointe vers **Ğ1-Test** (réseau de test Duniter, fausse monnaie) — voir
 `backend/.env` / `frontend/.env` pour basculer vers Ğ1 (mainnet, argent réel), à ne faire qu'une
@@ -42,13 +47,26 @@ fois l'application testée et prête.
 
 ## Structure
 
-- `backend/` — app Moleculer/SemApps (`@activitypods/app` 2.2). `wallet.service.js` gère l'accès
-  au secret du portefeuille (lecture seule, création faite côté frontend) ;
-  `pay-activity.service.js` gère l'activité `Pay` (c'est là que le virement Ğ1 a réellement lieu,
-  via `lib/duniter-client.js`) ; `app.service.js` déclare les besoins d'accès (access needs).
+- `backend/` — app Moleculer/SemApps (`@activitypods/app` 2.2). `pay-activity.service.js` ne fait
+  qu'écouter la réception de l'activité `Pay` (`onReceive`) pour notifier le destinataire — le
+  virement Ğ1 lui-même a déjà eu lieu côté frontend à ce stade, voir plus bas ; `app.service.js`
+  déclare les besoins d'accès (access needs).
 - `frontend/` — app Refine + Antd. `hooks/useWallet.ts` crée le portefeuille au premier lancement
   (clé générée dans le navigateur, jamais stockée en `localStorage`, immédiatement persistée sur
-  le Pod) ; `hooks/useDuniter.ts` lit le solde/historique directement depuis le réseau Duniter,
-  sans passer par le backend.
+  le Pod) et expose `pay()` : le virement Ğ1 est signé et diffusé sur la chaîne directement depuis
+  le navigateur (`hooks/useDuniter.ts`), pas par le backend — délibérément, pour qu'aucune autre
+  app du Réseau Social Universel ne puisse déclencher un virement en postant simplement une
+  activité `Offer{g1:Payment}` dans l'outbox (ce qui était le cas avant : n'importe quelle app
+  disposant du droit générique `apods:PostOutbox` pouvait faire bouger de l'argent réel, sans
+  consentement spécifique au paiement). Une autre app qui veut permettre un paiement redirige donc
+  vers cette app (`?to=<WebID ou adresse Ğ1>&amount=<Ğ1>&comment=<texte>` sur `/`, voir
+  `PayerPage.tsx`) plutôt que de poster l'activité elle-même ; l'utilisateur n'a plus qu'à cliquer
+  sur "Envoyer". `hooks/useDuniter.ts` lit aussi le solde/historique directement depuis le réseau
+  Duniter, sans passer par le backend.
 - `shapes/` — définitions SHACL/shape-tree de la ressource `g1:WalletSecret` propre à cette app
-  (servies statiquement par le frontend, voir `frontend/public/{shapes,shapetrees}`).
+  (source `.ttl` dans `shapes/source`, compilée en JSON-LD dans `shapes/dist`). Servi par le
+  conteneur statique de `docker-compose-shapes.yml` (`make shapes`), sur son propre port (3005) —
+  ni le backend ni le frontend ne peuvent l'héberger eux-mêmes : l'enregistrement des access needs
+  par `app.service.js` va chercher ce shapetree via `ldp.remote.get`, qui refuse toute URL sous le
+  `SEMAPPS_HOME_URL` du backend (protection contre l'auto-référencement, voir `isRemote` dans
+  `@semapps/ldp`).
