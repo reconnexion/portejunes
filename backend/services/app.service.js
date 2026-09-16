@@ -23,7 +23,7 @@ module.exports = {
     accessNeeds: {
       required: [
         {
-          shapeTreeUri: urlJoin(CONFIG.PORTEJUNES_SHAPE_REPOSITORY_URL, 'shapetrees/g1/WalletSecret.json'),
+          shapeTreeUri: urlJoin(CONFIG.SHAPE_REPOSITORY_URL, 'shapetrees/g1/WalletSecret'),
           accessMode: ['acl:Read', 'acl:Write', 'acl:Control']
         },
         {

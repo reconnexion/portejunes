@@ -11,21 +11,26 @@ import { formatHandle } from '../utils/handle';
 import { DUNITER_NETWORK } from '../config/env';
 import type { WalletSecretRecord } from '../types';
 
-// Keyed by webId, so a React 18 StrictMode dev double-mount (mount, cleanup, mount again) awaits
-// the same in-flight creation instead of starting a duplicate one -- see the effect below for why
-// that matters here specifically.
+// Keyed by webId: several components call useWallet() at once (WalletSidebar + the current
+// page), and in dev React StrictMode double-mounts each of them -- a second `createWallet()`
+// call while one is already running must await the same in-flight creation instead of starting
+// a duplicate one. This actually bit us when creation was automatic: two `g1:WalletSecret`
+// resources (and two accumulated `foaf:tipjar` values, see below) got created for the same
+// account, and payments silently went to whichever one wasn't the one being displayed.
 const walletCreationInFlight = new Map<string, Promise<string>>();
 
 /**
- * The logged-in user's own wallet: creates one on first use (see the plan's "Revision made
- * during implementation" -- generation happens here, in the browser, immediately followed by
- * persisting to the Pod, never touching localStorage) and exposes its public address, live
- * balance, and a `pay()` to send Ğ1. The seed is never persisted client-side (no localStorage),
- * but `pay()` does read it back from the Pod, in memory, to sign each transfer -- see
- * pay-activity.service.js for why that moved here instead of happening server-side.
+ * The logged-in user's own wallet, read from the Pod. Exposes its public address, live balance,
+ * a `pay()` to send Ğ1, and `createWallet()` for the one-time setup screen (WalletSetupPage) --
+ * creation is deliberately NOT automatic anymore: generating a hot wallet whose secret lives on
+ * the Pod is something the user should do knowingly, after being told what it is and where it's
+ * stored. Generation happens here, in the browser, immediately followed by persisting to the
+ * Pod, never touching localStorage; `pay()` reads the seed back from the Pod, in memory, to sign
+ * each transfer -- see pay-activity.service.js for why that moved here instead of happening
+ * server-side.
  */
 const useWallet = () => {
-  const { data: ownActor } = useOwnActor();
+  const { data: ownActor, refetch: refetchOwnActor } = useOwnActor();
   const webId = ownActor?.id;
 
   const { result, query } = useList<WalletSecretRecord>({
@@ -33,30 +38,17 @@ const useWallet = () => {
     queryOptions: { enabled: !!webId }
   });
 
-  const [address, setAddress] = useState<string | null>(null);
+  const existing = result?.data?.[0];
+  const address = existing?.['g1:address'] ?? null;
+  // `null` while we don't know yet (not logged in / list still loading), so callers can tell
+  // "no wallet, show the setup screen" apart from "still checking".
+  const hasWallet: boolean | null = !webId || query.isLoading ? null : !!existing;
+
   const [creating, setCreating] = useState(false);
   const [creationError, setCreationError] = useState<string | null>(null);
 
-  // Guards against creating more than one wallet per session. A plain `useRef` alone isn't
-  // enough: in dev, React 18 StrictMode intentionally mounts this component twice (mount,
-  // cleanup, mount again) to surface exactly this kind of bug, and a ref is recreated on each
-  // fresh mount so it doesn't survive that -- `walletCreationInFlight` does, since both mounts
-  // then attach to the same promise instead of racing to create two wallets. This actually bit
-  // us: two `g1:WalletSecret` resources (and two accumulated `foaf:tipjar` values, see below) got
-  // created for the same account during testing, and payments silently went to whichever one
-  // wasn't the one being displayed.
-  const attempted = useRef(false);
-
-  useEffect(() => {
-    if (!webId || query.isLoading || address || attempted.current) return;
-
-    const existing = result?.data?.[0];
-    if (existing) {
-      setAddress(existing['g1:address']);
-      return;
-    }
-
-    attempted.current = true;
+  const createWallet = useCallback(async () => {
+    if (!webId) return;
 
     let creation = walletCreationInFlight.get(webId);
     if (!creation) {
@@ -70,18 +62,29 @@ const useWallet = () => {
 
           const session = authProvider.getSession();
           const paytoUri = formatPaytoUri(DUNITER_NETWORK, newAddress);
-          // DELETE the previous value (if any) in the same update, instead of a bare INSERT DATA
-          // -- `foaf:tipjar` is meant to hold the account's one current wallet, and a blind
+          // DELETE the previous value(s) (if any) in the same update, instead of a bare INSERT
+          // DATA -- `foaf:tipjar` is meant to hold the account's one current wallet, and a blind
           // INSERT left every past `g1:WalletSecret` (including ones from aborted/duplicate
           // creations) permanently listed too. Payments then resolved to `foaf:tipjar`'s
           // arbitrary first value, which had no guaranteed relationship to the address actually
-          // shown as "yours".
+          // shown as "yours". The Pod provider only accepts ground `INSERT DATA`/`DELETE DATA`
+          // (no `DELETE … WHERE` with a variable, see @semapps/ldp's patch action), so the old
+          // values have to be spelled out: re-read the actor first rather than trusting
+          // useOwnActor's 5-minute cache.
+          const { data: freshActor } = await refetchOwnActor();
+          const oldValues = ([] as unknown[])
+            .concat(freshActor?.['foaf:tipjar'] ?? [])
+            .map(v => (typeof v === 'string' ? v : (v as { id?: string })?.id))
+            .filter((v): v is string => !!v);
+          const deleteData = oldValues.length
+            ? `DELETE DATA { ${oldValues.map(v => `<${webId}> foaf:tipjar <${v}> .`).join(' ')} };`
+            : '';
           await fetchJson(
             webId,
             {
               method: 'PATCH',
               headers: { 'Content-Type': 'application/sparql-update' },
-              body: `PREFIX foaf: <http://xmlns.com/foaf/0.1/> DELETE { <${webId}> foaf:tipjar ?old } INSERT { <${webId}> foaf:tipjar <${paytoUri}> } WHERE { OPTIONAL { <${webId}> foaf:tipjar ?old } }`
+              body: `PREFIX foaf: <http://xmlns.com/foaf/0.1/> ${deleteData} INSERT DATA { <${webId}> foaf:tipjar <${paytoUri}> . }`
             },
             session?.token
           );
@@ -96,6 +99,10 @@ const useWallet = () => {
             publishCesiumName(seed, handle).catch(e => console.error('Cesium+ profile publish failed:', e));
           }
 
+          // `address`/`pay()` derive from the list query, so refresh it before resolving --
+          // every useWallet() instance shares the same query key and picks the new wallet up.
+          await query.refetch();
+
           return newAddress;
         } finally {
           walletCreationInFlight.delete(webId);
@@ -105,29 +112,29 @@ const useWallet = () => {
     }
 
     setCreating(true);
-    creation
-      .then(newAddress => setAddress(newAddress))
-      .catch(e => {
-        setCreationError(e.message);
-        attempted.current = false; // allow retrying on next render if creation genuinely failed
-      })
-      .finally(() => setCreating(false));
-  }, [webId, query.isLoading, result?.data, address, ownActor]);
+    setCreationError(null);
+    try {
+      await creation;
+    } catch (e) {
+      setCreationError((e as Error).message);
+      throw e;
+    } finally {
+      setCreating(false);
+    }
+  }, [webId, ownActor, refetchOwnActor, query]);
 
-  // Covers wallets created before this feature existed (or if a previous publish attempt
-  // failed): re-checks once per mount, independent of the creation effect above (which only
-  // has the seed in scope at the moment of creation, not on a later reload). publishCesiumName
-  // is a no-op HTTP GET once the pod already has this title, so this is cheap to repeat.
+  // Covers wallets created before the Cesium+ feature existed (or if a previous publish attempt
+  // failed): re-checks once per mount. publishCesiumName is a no-op HTTP GET once the pod
+  // already has this title, so this is cheap to repeat.
   const cesiumChecked = useRef(false);
   useEffect(() => {
     if (cesiumChecked.current) return;
-    const existing = result?.data?.[0];
     const handle = ownActor && formatHandle(ownActor);
     const seed = existing?.['g1:seed'];
     if (!seed || !handle) return;
     cesiumChecked.current = true;
     publishCesiumName(seed, handle).catch(e => console.error('Cesium+ profile publish failed:', e));
-  }, [result?.data, ownActor]);
+  }, [existing, ownActor]);
 
   // Polled, not fetched once: a plain one-shot fetch here left the balance stuck at whatever it
   // was when the wallet first loaded, so the "your balance will update once confirmed" message
@@ -147,21 +154,25 @@ const useWallet = () => {
   // PayerPage.tsx's caller sees the real error instead of a payment that silently never landed.
   const pay = useCallback(
     async (toAddress: string, amountCentimes: number, comment?: string) => {
-      const seed = result?.data?.[0]?.['g1:seed'];
+      const seed = existing?.['g1:seed'];
       if (!seed) throw new Error('Portefeuille pas encore chargé, réessayez dans un instant.');
       const receipt = await transfer(seed, toAddress, amountCentimes, comment);
       await balanceQuery.refetch();
       return receipt;
     },
-    [result?.data, balanceQuery]
+    [existing, balanceQuery]
   );
 
   return {
     address,
+    hasWallet,
     tipjar: address ? parsePaytoUri(formatPaytoUri(DUNITER_NETWORK, address)) : null,
     balance: balanceQuery.data ?? null,
     isLoading: query.isLoading || creating,
+    creating,
+    creationError,
     error: creationError || balanceQuery.error?.message || null,
+    createWallet,
     pay
   };
 };

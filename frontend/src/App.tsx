@@ -5,13 +5,16 @@ import { AntdAuthPage } from '@activitypods/refine-providers/antd-auth-page';
 import { BrowserRouter, Routes, Route, Outlet } from 'react-router';
 import { SendOutlined, QrcodeOutlined, HistoryOutlined, ContactsOutlined } from '@ant-design/icons';
 import { App as AntdApp, ConfigProvider } from 'antd';
+import enUS from 'antd/locale/en_US';
+import frFR from 'antd/locale/fr_FR';
 
 import '@ant-design/v5-patch-for-react-19';
 import '@refinedev/antd/dist/reset.css';
 import './index.css';
 
 import { authProvider, dataProvider } from './providers';
-import { APP_NAME, DEFAULT_POD_PROVIDER } from './config/env';
+import { i18nProvider } from './i18n';
+import { APP_LANG, APP_NAME, DEFAULT_POD_PROVIDER } from './config/env';
 import theme from './theme';
 import PageLayout from './components/layout/PageLayout';
 import { PayerPage } from './pages/PayerPage';
@@ -19,14 +22,17 @@ import { RecevoirPage } from './pages/RecevoirPage';
 import { TransactionsPage } from './pages/TransactionsPage';
 import { ContactsPage } from './pages/ContactsPage';
 
+const antdLocale = APP_LANG === 'fr' ? frFR : enUS;
+
 const App: React.FC = () => (
   <BrowserRouter>
-    <ConfigProvider theme={theme}>
+    <ConfigProvider locale={antdLocale} theme={theme}>
       <AntdApp>
         <Refine
           authProvider={authProvider}
           dataProvider={dataProvider}
           routerProvider={routerProvider}
+          i18nProvider={i18nProvider}
           resources={[
             {
               name: 'pay',

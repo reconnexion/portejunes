@@ -1,0 +1,30 @@
+{
+  "notifications": {
+    "success": "Success",
+    "error": "Error",
+    "createSuccess": "Successfully created {{resource}}",
+    "createError": "Error creating: {{statusCode}}",
+    "editSuccess": "Successfully updated {{resource}}",
+    "editError": "Error updating: {{statusCode}}",
+    "deleteSuccess": "Successfully deleted {{resource}}",
+    "deleteError": "Error deleting: {{statusCode}}"
+  },
+  "buttons": {
+    "logout": "Log out",
+    "refresh": "Refresh"
+  },
+  "pages": {
+    "login": {
+      "choosePodProvider": "Choose the Pod provider that hosts your ActivityPods account",
+      "podProvidersNotLoaded": "Unable to load the list of Pod providers",
+      "backToLogin": "Back to login"
+    }
+  },
+  "apods": {
+    "error": {
+      "app_not_listening": "The app is not listening to {{uri}}",
+      "app_offline": "The app backend is offline",
+      "app_status_unavailable": "Unable to check app status"
+    }
+  }
+}

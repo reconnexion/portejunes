@@ -8,12 +8,13 @@ export const WALLET_SIDEBAR_WIDTH = 260;
 
 /** Balance + address, always visible in the left column on every page -- previously duplicated
  *  (or missing) on a per-page basis (Payer had its own balance card, Recevoir had a separate
- *  "Solde" card below the QR code). Pulled out into one shared place instead. */
+ *  "Solde" card below the QR code). Pulled out into one shared place instead. Hidden below the
+ *  mobile breakpoint, where WalletBar takes over (see index.css). */
 const WalletSidebar = () => {
   const wallet = useWallet();
 
   return (
-    <Card style={{ width: '100%' }}>
+    <Card className="pj-wallet-card" style={{ width: '100%' }}>
       {wallet.isLoading ? (
         <Spin />
       ) : wallet.error && wallet.balance === null ? (

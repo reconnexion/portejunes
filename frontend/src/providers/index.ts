@@ -1,10 +1,13 @@
 import { authProvider as apAuthProvider, dataProvider as apDataProvider } from '@activitypods/refine-providers';
 
 import urlJoin from '../utils/urlJoin';
-import { BACKEND_URL, CLIENT_ID, SHAPE_REPOSITORY_URL, PORTEJUNES_SHAPE_REPOSITORY_URL } from '../config/env';
+import { BACKEND_URL, CLIENT_ID, SHAPE_REPOSITORY_URL } from '../config/env';
 
 export const authProvider = apAuthProvider({
-  clientId: CLIENT_ID
+  clientId: CLIENT_ID,
+  // `AntdBackgroundChecks` (see `components/layout/PageLayout.tsx`) already polls the app status
+  // and covers the re-consent case, no need for the auth provider's own poll on top of it.
+  appStatusCheckInterval: false
 });
 
 /** Merges in the backend's own JSON-LD context (`g1`, `apods`, `interop`... prefixes, with
@@ -18,7 +21,7 @@ export const dataProvider = apDataProvider({
   jsonContext: JSON_CONTEXT,
   resources: {
     wallet: {
-      shapeTreeUri: urlJoin(PORTEJUNES_SHAPE_REPOSITORY_URL, 'shapetrees/g1/WalletSecret.json')
+      shapeTreeUri: urlJoin(SHAPE_REPOSITORY_URL, 'shapetrees/g1/WalletSecret')
     },
     profile: {
       shapeTreeUri: urlJoin(SHAPE_REPOSITORY_URL, 'shapetrees/as/Profile')

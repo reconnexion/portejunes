@@ -1,8 +1,8 @@
 # PorteJunes
 
 Envoyez et recevez des Ğ1 (monnaie libre, [Duniter](https://duniter.org)) via le Réseau Social
-Universel — un "hot wallet" éphémère, créé automatiquement et lié à votre WebID via
-`foaf:tipjar`, inspiré de [G1nkgo](https://g1nkgo.comunes.org/).
+Universel — un "hot wallet" éphémère, généré à la demande de l'utilisateur et lié à votre WebID
+via `foaf:tipjar`, inspiré de [G1nkgo](https://g1nkgo.comunes.org/).
 
 Compatible [ActivityPods](https://activitypods.org/) 2.2, construit avec
 [Refine](https://refine.dev/) + [Ant Design](https://ant.design/) et
@@ -26,17 +26,21 @@ Pas encore testé de bout en bout avec deux vrais comptes Pod.
 # Terminal 1 -- infrastructure (Fuseki, Redis, un Pod provider ActivityPods de test)
 docker compose -f docker-compose-dev.yml up
 
-# Terminal 2 -- shapetree de cette app (g1:WalletSecret), port 3005 -- requis pour que le backend
-# démarre : app.service enregistre ses access needs en allant chercher ce shapetree, et ça échoue
-# tant qu'il n'est pas servi (voir "Structure" plus bas pour le pourquoi).
-make shapes
+# Terminal 2 -- backend de l'app (port 3004)
+cd backend && yarn install && yarn link-packages && yarn dev
 
-# Terminal 3 -- backend de l'app (port 3004)
-cd backend && yarn install && yarn dev
-
-# Terminal 4 -- frontend (port 4004)
+# Terminal 3 -- frontend (port 4004)
 cd frontend && yarn install && yarn dev
 ```
+
+`yarn link-packages` lie `@activitypods/app` au framework local (`activitypods/app-framework/app`,
+`yarn link` y ayant été lancé au préalable) plutôt qu'à la version npm : le Pod provider de test
+tourne sur la branche `next` d'ActivityPods, où les `interop:DataGrant` ont été supprimés, alors
+que `@activitypods/app@2.2.0` publié les attend encore. Sans ce lien, l'enregistrement de l'app
+échoue silencieusement côté backend (`One or more required access needs have not been granted`
+dans la file Bull) : l'app n'écoute alors ni l'inbox ni l'outbox, et le frontend affiche
+« L'application n'écoute pas … ». Comme le framework local est en TypeScript, `yarn dev` passe
+par `tsx` (idem pour le Pod provider). Repasser sur les paquets npm : `yarn unlink-packages`.
 
 Créez un compte sur le Pod provider de test (http://localhost:5000), puis ouvrez
 http://localhost:4004, connectez-vous, et autorisez l'application.
@@ -51,9 +55,12 @@ fois l'application testée et prête.
   qu'écouter la réception de l'activité `Pay` (`onReceive`) pour notifier le destinataire — le
   virement Ğ1 lui-même a déjà eu lieu côté frontend à ce stade, voir plus bas ; `app.service.js`
   déclare les besoins d'accès (access needs).
-- `frontend/` — app Refine + Antd. `hooks/useWallet.ts` crée le portefeuille au premier lancement
-  (clé générée dans le navigateur, jamais stockée en `localStorage`, immédiatement persistée sur
-  le Pod) et expose `pay()` : le virement Ğ1 est signé et diffusé sur la chaîne directement depuis
+- `frontend/` — app Refine + Antd. Tant que le compte n'a pas de portefeuille, `PageLayout`
+  affiche `pages/WalletSetupPage.tsx` à la place de tous les écrans : elle explique ce qu'est un
+  hot wallet et où il est stocké, et c'est le bouton "Générer" qui appelle
+  `hooks/useWallet.ts#createWallet()` (clé générée dans le navigateur, jamais stockée en
+  `localStorage`, immédiatement persistée sur le Pod) — la création n'est volontairement plus
+  automatique. `useWallet` expose aussi `pay()` : le virement Ğ1 est signé et diffusé sur la chaîne directement depuis
   le navigateur (`hooks/useDuniter.ts`), pas par le backend — délibérément, pour qu'aucune autre
   app du Réseau Social Universel ne puisse déclencher un virement en postant simplement une
   activité `Offer{g1:Payment}` dans l'outbox (ce qui était le cas avant : n'importe quelle app
@@ -63,10 +70,11 @@ fois l'application testée et prête.
   `PayerPage.tsx`) plutôt que de poster l'activité elle-même ; l'utilisateur n'a plus qu'à cliquer
   sur "Envoyer". `hooks/useDuniter.ts` lit aussi le solde/historique directement depuis le réseau
   Duniter, sans passer par le backend.
-- `shapes/` — définitions SHACL/shape-tree de la ressource `g1:WalletSecret` propre à cette app
-  (source `.ttl` dans `shapes/source`, compilée en JSON-LD dans `shapes/dist`). Servi par le
-  conteneur statique de `docker-compose-shapes.yml` (`make shapes`), sur son propre port (3005) —
-  ni le backend ni le frontend ne peuvent l'héberger eux-mêmes : l'enregistrement des access needs
-  par `app.service.js` va chercher ce shapetree via `ldp.remote.get`, qui refuse toute URL sous le
+- Shapes — la ressource `g1:WalletSecret` propre à cette app (namespace
+  `https://portejunes.com/ns/core#`) est publiée sur https://shapes.activitypods.org/ comme les
+  shapes standard (source dans le dépôt [activitypods/shapes](https://github.com/activitypods/shapes),
+  `packages/shape-definitions/source/{shapes,shapetrees}/g1/WalletSecret.ttl`). Ni le backend ni
+  le frontend ne pourraient l'héberger eux-mêmes : l'enregistrement des access needs par
+  `app.service.js` va chercher ce shapetree via `ldp.remote.get`, qui refuse toute URL sous le
   `SEMAPPS_HOME_URL` du backend (protection contre l'auto-référencement, voir `isRemote` dans
   `@semapps/ldp`).

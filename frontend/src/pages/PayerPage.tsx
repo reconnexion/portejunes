@@ -15,6 +15,7 @@ import { parsePaytoUri } from '../utils/payto';
 import WalletContactPicker from '../components/WalletContactPicker';
 import QrScanButton from '../components/QrScanButton';
 import type { ProfileRecord } from '../types';
+import CardTitle from '../components/CardTitle';
 
 const { Text } = Typography;
 
@@ -182,7 +183,7 @@ export const PayerPage = () => {
   };
 
   return (
-    <Card title="Envoyer des Ğ1" style={{ width: '100%' }}>
+    <Card title={<CardTitle icon={<SendOutlined />}>Envoyer des Ğ1</CardTitle>} style={{ width: '100%' }}>
         {!recipient ? (
           <Space direction="vertical" style={{ width: '100%' }}>
             <QrScanButton onScan={resolveRecipientInput} />

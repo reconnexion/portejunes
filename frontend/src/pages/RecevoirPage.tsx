@@ -1,8 +1,10 @@
 import { Card, Space, Typography, Spin } from 'antd';
+import { QrcodeOutlined } from '@ant-design/icons';
 import { QRCodeSVG } from 'qrcode.react';
 
 import useWallet from '../hooks/useWallet';
 import useOwnActor from '../hooks/useOwnActor';
+import CardTitle from '../components/CardTitle';
 
 const { Text } = Typography;
 
@@ -13,7 +15,7 @@ export const RecevoirPage = () => {
   const { data: ownActor } = useOwnActor();
 
   return (
-    <Card title="Recevoir des Ğ1" style={{ textAlign: 'center', width: '100%' }}>
+    <Card title={<CardTitle icon={<QrcodeOutlined />}>Recevoir des Ğ1</CardTitle>} style={{ width: '100%' }} styles={{ body: { textAlign: 'center' } }}>
       {!ownActor?.id || wallet.isLoading || !wallet.address ? (
         <Spin />
       ) : (

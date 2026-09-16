@@ -1,8 +1,10 @@
 import { useNavigate } from 'react-router';
 import { Card } from 'antd';
+import { ContactsOutlined } from '@ant-design/icons';
 
 import WalletContactPicker from '../components/WalletContactPicker';
 import useOwnActor from '../hooks/useOwnActor';
+import CardTitle from '../components/CardTitle';
 
 /** Lists contacts who have a Ğ1 wallet (see the plan: "lister tous les contacts qui ont un
  *  wallet"). Reuses the same picker as the Payer screen -- selecting a contact here jumps
@@ -12,7 +14,7 @@ export const ContactsPage = () => {
   const { data: ownActor } = useOwnActor();
 
   return (
-    <Card title="Contacts" style={{ width: '100%' }}>
+    <Card title={<CardTitle icon={<ContactsOutlined />}>Contacts</CardTitle>} style={{ width: '100%' }}>
       <WalletContactPicker
         onSelect={recipient => navigate('/', { state: { recipient } })}
         excludeWebId={ownActor?.id}

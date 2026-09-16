@@ -1,10 +1,11 @@
 import { useQuery } from '@tanstack/react-query';
 import { List, Empty, Spin, Alert, Card, Typography } from 'antd';
-import { ArrowUpOutlined, ArrowDownOutlined } from '@ant-design/icons';
+import { ArrowUpOutlined, ArrowDownOutlined, HistoryOutlined } from '@ant-design/icons';
 
 import useWallet from '../hooks/useWallet';
 import useContactDirectory from '../hooks/useContactDirectory';
 import { getHistory } from '../hooks/useDuniter';
+import CardTitle from '../components/CardTitle';
 
 const { Text } = Typography;
 
@@ -33,9 +34,11 @@ export const TransactionsPage = () => {
     refetchInterval: 30_000
   });
 
+  const title = <CardTitle icon={<HistoryOutlined />}>Opérations</CardTitle>;
+
   if (wallet.isLoading || isLoading || directory.isLoading) {
     return (
-      <Card title="Opérations" style={{ width: '100%', textAlign: 'center' }}>
+      <Card title={title} style={{ width: '100%' }} styles={{ body: { textAlign: 'center' } }}>
         <Spin />
       </Card>
     );
@@ -45,7 +48,7 @@ export const TransactionsPage = () => {
   // indistinguishable from "the indexer is unreachable", see the plan's open risk on this.
   if (!history || history.length === 0) {
     return (
-      <Card title="Opérations" style={{ width: '100%' }}>
+      <Card title={title} style={{ width: '100%' }}>
         <Alert
           type="info"
           showIcon
@@ -59,7 +62,7 @@ export const TransactionsPage = () => {
   }
 
   return (
-    <Card title="Opérations" style={{ width: '100%' }} styles={{ body: { padding: 0 } }}>
+    <Card title={title} style={{ width: '100%' }} styles={{ body: { padding: 0 } }}>
       <List
         dataSource={history}
         style={{ padding: '0 24px' }}

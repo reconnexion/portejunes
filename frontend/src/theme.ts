@@ -17,6 +17,13 @@ const theme: ThemeConfig = {
     Menu: {
       itemSelectedColor: '#2E7D32',
       itemSelectedBg: '#e8f5e9'
+    },
+    // Card titles ("Envoyer des Ğ1", "Opérations"...) as proper section headings: bigger, with
+    // the page's nav icon in front (see components/CardTitle.tsx). Antd's default 16px didn't
+    // read as distinct from the content.
+    Card: {
+      headerFontSize: 20,
+      headerHeight: 52
     }
   }
 };

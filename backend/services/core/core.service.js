@@ -3,16 +3,15 @@ const { CoreService } = require('@semapps/core');
 const { apods, notify, interop, oidc } = require('@semapps/ontologies');
 const CONFIG = require('../../config/config');
 
-// Ğ1 (June, Duniter's libre currency) vocabulary used by this app.
-// Not published on shapes.activitypods.org (this app hosts its own shapetree instead, see
-// shapes/dist and docker-compose-shapes.yml) since it's specific to PorteJunes, not a shared
-// ActivityPods type. It's served from its own dedicated origin, not this backend's -- app.service's
+// Ğ1 (June, Duniter's libre currency) vocabulary used by this app. The matching g1:WalletSecret
+// shape/shapetree is published on shapes.activitypods.org (activitypods/shapes repo,
+// source/{shapes,shapetrees}/g1/) -- it can't be served by this backend itself: app.service's
 // access-need registration dereferences shapeTreeUri through ldp.remote.get, which refuses any
 // resourceUri under this app's own baseUrl (see @semapps/ldp's isRemote action) to keep apps from
 // self-referencing their own ACL-protected resources through the anonymous network-fetch path.
 const g1 = {
   prefix: 'g1',
-  namespace: 'https://portejunes.example/ns/core#',
+  namespace: 'https://portejunes.com/ns/core#',
   jsonldContext: {
     'g1:seed': { '@type': 'xsd:string' },
     'g1:address': { '@type': 'xsd:string' },

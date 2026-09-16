@@ -12,7 +12,7 @@ const { PodActivitiesHandlerMixin } = require('@activitypods/app');
 //   this service's own stored data via SPARQL (predicate is the full
 //   `.../activitystreams#summary` IRI; the compacted JSON-LD handed to this handler exposes that
 //   as bare `summary`).
-const G1_NS = 'https://portejunes.example/ns/core#';
+const G1_NS = 'https://portejunes.com/ns/core#';
 const AS_NS = 'https://www.w3.org/ns/activitystreams#';
 function pick(obj, prefixed, ns) {
   const bare = prefixed.split(':')[1];

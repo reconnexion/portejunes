@@ -47,6 +47,15 @@ a {
   display: none;
 }
 
+/* Balance strip under the app bar, mobile only -- replaces the wallet card there (see
+   WalletBar.tsx / WalletSidebar.tsx). */
+.pj-wallet-bar {
+  display: none;
+  height: 44px;
+  background: #fff;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+}
+
 @media (max-width: 768px) {
   .pj-nav-desktop {
     display: none;
@@ -64,8 +73,20 @@ a {
     padding: 4px 8px calc(4px + env(safe-area-inset-bottom));
   }
 
+  .pj-wallet-bar {
+    display: flex;
+    align-items: center;
+  }
+
+  .pj-wallet-card {
+    display: none;
+  }
+
   .pj-layout {
     flex-direction: column;
+    /* The sidebar column has no in-flow content left on mobile (nav is fixed at the bottom,
+       wallet card hidden), so no gap either or it'd just push the page content down. */
+    gap: 0;
     padding-top: 16px;
     padding-bottom: 76px;
   }
