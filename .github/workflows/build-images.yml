@@ -1,0 +1,118 @@
+name: Build and publish Docker images
+
+# Builds the PorteJunes backend and frontend images and pushes them to the
+# GitHub Container Registry.
+#
+#   push on `master` -> :dev    images, built for the DEV_DOMAIN_NAME repository variable
+#   push of a `v*` git tag -> :x.y.z and :latest images, built for PROD_DOMAIN_NAME
+#
+# The frontend values are inlined by Vite at build time, which is why the
+# target domain has to be known here and not at deployment time. Both domain
+# variables must be set on the repository: there is no default.
+
+on:
+  push:
+    branches: [master]
+    tags: ['v*']
+  workflow_dispatch:
+
+concurrency:
+  group: build-images-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        component: [backend, frontend]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select the target environment
+        id: env
+        run: |
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            domain="${{ vars.PROD_DOMAIN_NAME }}"; var=PROD_DOMAIN_NAME; app_name="PorteJunes"
+          else
+            domain="${{ vars.DEV_DOMAIN_NAME }}"; var=DEV_DOMAIN_NAME; app_name="PorteJunes (dev)"
+          fi
+          if [ -z "$domain" ]; then
+            echo "::error::The $var repository variable is not set (Settings > Secrets and variables > Actions > Variables)"
+            exit 1
+          fi
+          echo "domain=$domain" >> "$GITHUB_OUTPUT"
+          echo "app_name=$app_name" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/metadata-action@v5
+        id: meta
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/portejunes-${{ matrix.component }}
+          tags: |
+            type=raw,value=dev,enable=${{ github.ref_type != 'tag' }}
+            type=semver,pattern={{version}}
+            type=raw,value=latest,enable=${{ github.ref_type == 'tag' }}
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./docker/${{ matrix.component }}.dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=${{ matrix.component }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.component }}
+          # Ignored by the backend image, which takes no build argument
+          build-args: |
+            VITE_APP_NAME=${{ steps.env.outputs.app_name }}
+            VITE_APP_LANG=fr
+            VITE_BACKEND_URL=https://${{ steps.env.outputs.domain }}/api/
+            VITE_CLIENT_ID=https://${{ steps.env.outputs.domain }}/api/app
+            VITE_SHAPE_REPOSITORY_URL=${{ vars.SHAPE_REPOSITORY_URL || 'https://shapes.activitypods.org/' }}
+            # Set the POD_PROVIDER_BASE_URL repository variable to restrict the login page to
+            # a single Pod provider. Unset, it lists the public providers and lets the user pick.
+            VITE_POD_PROVIDER_URL=${{ vars.POD_PROVIDER_BASE_URL }}
+            # Duniter / Ğ1: Ğ1-Test (fake money) unless the DUNITER_* repository variables say
+            # otherwise -- only switch to mainnet (g1) once the app is tested and ready.
+            VITE_DUNITER_NETWORK=${{ vars.DUNITER_NETWORK || 'g1-test' }}
+            VITE_DUNITER_RPC_ENDPOINTS=${{ vars.DUNITER_RPC_ENDPOINTS || 'wss://gtest.1000i100.fr,wss://gtest.asycn.io/ws/,wss://gtest.cgeek.fr,wss://gt.p2p.legal/ws' }}
+            VITE_DUNITER_INDEXER_URL=${{ vars.DUNITER_INDEXER_URL || 'https://squid.gtest.coinduf.eu/v1/graphql' }}
+            VITE_DUNITER_SS58_FORMAT=${{ vars.DUNITER_SS58_FORMAT || '4450' }}
+
+  # Once both :dev images are on ghcr.io, ask Coolify to pull them and restart
+  # the dev stack (no build happens on the server). Requires the repository
+  # variables COOLIFY_URL (e.g. https://coolify.example.org) and
+  # COOLIFY_DEV_SERVICE_UUID, and the secret COOLIFY_TOKEN (an API token with
+  # write permission on the service). Skipped while they are not set.
+  deploy-dev:
+    needs: build
+    if: github.ref_type != 'tag'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Restart the dev stack on Coolify with the latest images
+        env:
+          COOLIFY_URL: ${{ vars.COOLIFY_URL }}
+          COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
+          SERVICE_UUID: ${{ vars.COOLIFY_DEV_SERVICE_UUID }}
+        run: |
+          if [ -z "$COOLIFY_URL" ] || [ -z "$COOLIFY_TOKEN" ] || [ -z "$SERVICE_UUID" ]; then
+            echo "COOLIFY_URL / COOLIFY_TOKEN / COOLIFY_DEV_SERVICE_UUID not set, skipping deployment"
+            exit 0
+          fi
+          curl --fail-with-body -sS -X POST \
+            -H "Authorization: Bearer $COOLIFY_TOKEN" \
+            "$COOLIFY_URL/api/v1/services/$SERVICE_UUID/restart?latest=true"

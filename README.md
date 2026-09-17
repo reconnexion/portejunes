@@ -27,20 +27,19 @@ Pas encore testé de bout en bout avec deux vrais comptes Pod.
 docker compose -f docker-compose-dev.yml up
 
 # Terminal 2 -- backend de l'app (port 3004)
-cd backend && yarn install && yarn link-packages && yarn dev
+cd backend && yarn install && yarn dev
 
 # Terminal 3 -- frontend (port 4004)
 cd frontend && yarn install && yarn dev
 ```
 
-`yarn link-packages` lie `@activitypods/app` au framework local (`activitypods/app-framework/app`,
-`yarn link` y ayant été lancé au préalable) plutôt qu'à la version npm : le Pod provider de test
-tourne sur la branche `next` d'ActivityPods, où les `interop:DataGrant` ont été supprimés, alors
-que `@activitypods/app@2.2.0` publié les attend encore. Sans ce lien, l'enregistrement de l'app
-échoue silencieusement côté backend (`One or more required access needs have not been granted`
-dans la file Bull) : l'app n'écoute alors ni l'inbox ni l'outbox, et le frontend affiche
-« L'application n'écoute pas … ». Comme le framework local est en TypeScript, `yarn dev` passe
-par `tsx` (idem pour le Pod provider). Repasser sur les paquets npm : `yarn unlink-packages`.
+Le backend cible un Pod provider ActivityPods **2.3** (branche `next`) : `@activitypods/app` doit être
+en 2.3.x et `@semapps/*` en 1.2.x, les 2.2/1.1 publiés attendent encore les `interop:DataGrant` que
+2.3 a supprimés (sinon l'enregistrement de l'app échoue silencieusement côté backend, l'app n'écoute
+pas l'inbox et le frontend affiche « L'application n'écoute pas … »). Pour développer sur le framework
+lui-même, `yarn link-packages` lie `@activitypods/app` à `activitypods/app-framework/app` (`yarn link`
+lancé là-bas au préalable) ; ce dépôt étant en TypeScript, `yarn dev` passe par `tsx`. Retour aux
+paquets npm : `yarn unlink-packages`.
 
 Créez un compte sur le Pod provider de test (http://localhost:5000), puis ouvrez
 http://localhost:4004, connectez-vous, et autorisez l'application.
