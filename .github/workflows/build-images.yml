@@ -1,18 +1,19 @@
 name: Build and publish Docker images
 
-# Builds the PorteJunes backend and frontend images and pushes them to the
-# GitHub Container Registry.
+# Builds the PorteJunes backend and frontend release images and pushes them to
+# the GitHub Container Registry:
 #
-#   push on `master` -> :dev    images, built for the DEV_DOMAIN_NAME repository variable
 #   push of a `v*` git tag -> :x.y.z and :latest images, built for PROD_DOMAIN_NAME
 #
+# The dev environment and the pull request previews are not built here anymore:
+# Coolify builds them itself from docker-compose.coolify.yml (see the README).
+#
 # The frontend values are inlined by Vite at build time, which is why the
-# target domain has to be known here and not at deployment time. Both domain
-# variables must be set on the repository: there is no default.
+# target domain has to be known here and not at deployment time. The
+# PROD_DOMAIN_NAME repository variable must be set: there is no default.
 
 on:
   push:
-    branches: [master]
     tags: ['v*']
   workflow_dispatch:
 
@@ -37,11 +38,7 @@ jobs:
       - name: Select the target environment
         id: env
         run: |
-          if [ "${{ github.ref_type }}" = "tag" ]; then
-            domain="${{ vars.PROD_DOMAIN_NAME }}"; var=PROD_DOMAIN_NAME; app_name="PorteJunes"
-          else
-            domain="${{ vars.DEV_DOMAIN_NAME }}"; var=DEV_DOMAIN_NAME; app_name="PorteJunes (dev)"
-          fi
+          domain="${{ vars.PROD_DOMAIN_NAME }}"; var=PROD_DOMAIN_NAME; app_name="PorteJunes"
           if [ -z "$domain" ]; then
             echo "::error::The $var repository variable is not set (Settings > Secrets and variables > Actions > Variables)"
             exit 1
@@ -54,7 +51,6 @@ jobs:
         with:
           images: ghcr.io/${{ github.repository_owner }}/portejunes-${{ matrix.component }}
           tags: |
-            type=raw,value=dev,enable=${{ github.ref_type != 'tag' }}
             type=semver,pattern={{version}}
             type=raw,value=latest,enable=${{ github.ref_type == 'tag' }}
 
@@ -92,27 +88,3 @@ jobs:
             VITE_DUNITER_RPC_ENDPOINTS=${{ vars.DUNITER_RPC_ENDPOINTS || 'wss://gtest.1000i100.fr,wss://gtest.asycn.io/ws/,wss://gtest.cgeek.fr,wss://gt.p2p.legal/ws' }}
             VITE_DUNITER_INDEXER_URL=${{ vars.DUNITER_INDEXER_URL || 'https://squid.gtest.coinduf.eu/v1/graphql' }}
             VITE_DUNITER_SS58_FORMAT=${{ vars.DUNITER_SS58_FORMAT || '4450' }}
-
-  # Once both :dev images are on ghcr.io, ask Coolify to pull them and restart
-  # the dev stack (no build happens on the server). Requires the repository
-  # variables COOLIFY_URL (e.g. https://coolify.example.org) and
-  # COOLIFY_DEV_SERVICE_UUID, and the secret COOLIFY_TOKEN (an API token with
-  # write permission on the service). Skipped while they are not set.
-  deploy-dev:
-    needs: build
-    if: github.ref_type != 'tag'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Restart the dev stack on Coolify with the latest images
-        env:
-          COOLIFY_URL: ${{ vars.COOLIFY_URL }}
-          COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
-          SERVICE_UUID: ${{ vars.COOLIFY_DEV_SERVICE_UUID }}
-        run: |
-          if [ -z "$COOLIFY_URL" ] || [ -z "$COOLIFY_TOKEN" ] || [ -z "$SERVICE_UUID" ]; then
-            echo "COOLIFY_URL / COOLIFY_TOKEN / COOLIFY_DEV_SERVICE_UUID not set, skipping deployment"
-            exit 0
-          fi
-          curl --fail-with-body -sS -X POST \
-            -H "Authorization: Bearer $COOLIFY_TOKEN" \
-            "$COOLIFY_URL/api/v1/services/$SERVICE_UUID/restart?latest=true"
