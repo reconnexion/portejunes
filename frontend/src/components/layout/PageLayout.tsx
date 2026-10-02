@@ -6,6 +6,7 @@ import AppBar from './AppBar';
 import WalletBar from './WalletBar';
 import NavMenu from './NavMenu';
 import WalletSidebar from './WalletSidebar';
+import SupportLink from './SupportLink';
 import { PAGE_MAX_WIDTH } from './constants';
 import useOwnActor from '../../hooks/useOwnActor';
 import useWallet from '../../hooks/useWallet';
@@ -64,6 +65,7 @@ const PageLayout = ({ children }: { children: ReactNode }) => {
           <div className="pj-sidebar-column">
             <NavMenu />
             <WalletSidebar />
+            <SupportLink />
           </div>
           <div className="pj-content-column">{children}</div>
         </div>

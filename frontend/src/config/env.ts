@@ -16,6 +16,10 @@ export const SHAPE_REPOSITORY_URL = (import.meta.env.VITE_SHAPE_REPOSITORY_URL a
 /** When set, the login page offers this single Pod provider instead of the public list. */
 export const DEFAULT_POD_PROVIDER = import.meta.env.VITE_POD_PROVIDER_URL as string | undefined;
 
+/** Where "Soutenir cette application" (under the wallet card, and in the user menu) sends
+ *  people. Unset hides the link. */
+export const DONATION_URL = import.meta.env.VITE_DONATION_URL as string | undefined;
+
 /// Duniter / Ğ1 -- browser talks directly to the chain for reads (balance, history); see the
 /// plan's "Revision made during implementation" section for why. `SEMAPPS_DUNITER_*` server-side
 /// env vars are the same values, kept in sync manually.

@@ -1,10 +1,19 @@
 import { useGetIdentity } from '@refinedev/core';
 import { Avatar, Button, Dropdown, Space } from 'antd';
-import { AppstoreOutlined, DatabaseOutlined, LogoutOutlined, SettingOutlined, TeamOutlined, UserOutlined } from '@ant-design/icons';
+import {
+  AppstoreOutlined,
+  DatabaseOutlined,
+  HeartFilled,
+  LogoutOutlined,
+  SettingOutlined,
+  TeamOutlined,
+  UserOutlined
+} from '@ant-design/icons';
 import { Link } from 'react-router';
 
 import useNodeinfo from '../../hooks/useNodeinfo';
 import urlJoin from '../../utils/urlJoin';
+import { DONATION_URL } from '../../config/env';
 import { authProvider } from '../../providers';
 import type { Identity } from '../../types';
 
@@ -77,6 +86,19 @@ const UserMenu = () => {
                     </a>
                   ),
                   icon: <SettingOutlined />
+                }
+              ]
+            : []),
+          ...(DONATION_URL
+            ? [
+                {
+                  key: 'support',
+                  label: (
+                    <a href={DONATION_URL} target="_blank" rel="noopener noreferrer">
+                      Soutenir cette application
+                    </a>
+                  ),
+                  icon: <HeartFilled style={{ color: '#ff4d4f' }} />
                 }
               ]
             : []),

@@ -82,6 +82,8 @@ jobs:
             # Set the POD_PROVIDER_BASE_URL repository variable to restrict the login page to
             # a single Pod provider. Unset, it lists the public providers and lets the user pick.
             VITE_POD_PROVIDER_URL=${{ vars.POD_PROVIDER_BASE_URL }}
+            # Unset hides the "Soutenir cette application" link
+            VITE_DONATION_URL=${{ vars.DONATION_URL }}
             # Duniter / Ğ1: Ğ1-Test (fake money) unless the DUNITER_* repository variables say
             # otherwise -- only switch to mainnet (g1) once the app is tested and ready.
             VITE_DUNITER_NETWORK=${{ vars.DUNITER_NETWORK || 'g1-test' }}

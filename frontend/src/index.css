@@ -47,6 +47,19 @@ a {
   display: none;
 }
 
+/* Discreet "Soutenir cette application" link under the wallet card -- see SupportLink.tsx. */
+.pj-support-link {
+  display: block;
+  margin-top: 16px;
+  text-align: center;
+  font-size: 12px;
+  color: rgba(0, 0, 0, 0.45);
+}
+
+.pj-support-link:hover {
+  color: rgba(0, 0, 0, 0.65);
+}
+
 /* Balance strip under the app bar, mobile only -- replaces the wallet card there (see
    WalletBar.tsx / WalletSidebar.tsx). */
 .pj-wallet-bar {
@@ -78,7 +91,8 @@ a {
     align-items: center;
   }
 
-  .pj-wallet-card {
+  .pj-wallet-card,
+  .pj-support-link {
     display: none;
   }
 
