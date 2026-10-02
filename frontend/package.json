@@ -9,7 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@activitypods/refine-providers": "^0.1.5",
+    "@activitypods/refine-providers": "^0.1.6",
     "@ant-design/icons": "^5.5.1",
     "@ant-design/v5-patch-for-react-19": "^1.0.3",
     "@polkadot/api": "^16.5.6",
