@@ -117,7 +117,11 @@ export const PayerPage = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profilesQuery.isLoading]);
 
-  const maxSendable = wallet.balance !== null ? wallet.balance / 100 : null;
+  // The existential deposit has to stay on the wallet (see useWallet), so it's not sendable.
+  const maxSendable =
+    wallet.balance !== null && wallet.existentialDeposit !== null
+      ? Math.max(0, wallet.balance - wallet.existentialDeposit) / 100
+      : null;
 
   const handleSend = async () => {
     if (!recipient || !amount) return;
@@ -227,7 +231,10 @@ export const PayerPage = () => {
               status={amount !== null && maxSendable !== null && amount > maxSendable ? 'error' : undefined}
             />
             {amount !== null && maxSendable !== null && amount > maxSendable && (
-              <Text type="danger">Solde insuffisant ({maxSendable.toFixed(2)} Ğ1 disponible)</Text>
+              <Text type="danger">
+                Solde insuffisant ({maxSendable.toFixed(2)} Ğ1 disponible, {(wallet.existentialDeposit! / 100).toFixed(2)} Ğ1
+                devant rester sur le portefeuille)
+              </Text>
             )}
             <Input
               placeholder="Commentaire (optionnel)"

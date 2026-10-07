@@ -86,6 +86,16 @@ export async function getExistentialDeposit(): Promise<number> {
   return api.consts.balances.existentialDeposit.toNumber();
 }
 
+/** User-facing messages for the `TokenError`s a balance transfer can fail with (otherwise shown
+ *  raw, e.g. `{"token":"NotExpendable"}`). */
+const TOKEN_ERROR_MESSAGES: Record<string, string> = {
+  FundsUnavailable: 'Solde insuffisant.',
+  NotExpendable: "Solde insuffisant : 1 Ğ1 minimum doit rester sur le portefeuille après l'envoi.",
+  BelowMinimum: "Le portefeuille du destinataire n'existe pas encore sur la chaîne : il faut lui envoyer au moins 1 Ğ1.",
+  Frozen: 'Fonds gelés.',
+  Blocked: 'Compte bloqué.'
+};
+
 /** Signs and submits a transferKeepAlive from the wallet identified by `seed` to `toAddress`,
  *  optionally with a `comment`. Resolves once the extrinsic is included in a block; throws on a
  *  dispatch error (including the recipient not meeting the existential deposit, or the sender
@@ -118,6 +128,8 @@ export async function transfer(seed: string, toAddress: string, amountCentimes: 
           if (dispatchError.isModule) {
             const decoded = api.registry.findMetaError(dispatchError.asModule);
             reject(new Error(`${decoded.section}.${decoded.name}: ${decoded.docs.join(' ')}`));
+          } else if (dispatchError.isToken) {
+            reject(new Error(TOKEN_ERROR_MESSAGES[dispatchError.asToken.type] ?? `Token.${dispatchError.asToken.type}`));
           } else {
             reject(new Error(dispatchError.toString()));
           }

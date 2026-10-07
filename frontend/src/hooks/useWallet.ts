@@ -5,7 +5,7 @@ import { fetchJson } from '@activitypods/refine-providers/utils';
 
 import { authProvider, dataProvider } from '../providers';
 import useOwnActor from './useOwnActor';
-import { createKeypair, getBalance, publishCesiumName, transfer } from './useDuniter';
+import { createKeypair, getBalance, getExistentialDeposit, publishCesiumName, transfer } from './useDuniter';
 import { formatPaytoUri, parsePaytoUri } from '../utils/payto';
 import { formatHandle } from '../utils/handle';
 import { DUNITER_NETWORK } from '../config/env';
@@ -148,6 +148,14 @@ const useWallet = () => {
     refetchInterval: 8000
   });
 
+  // A chain constant (1 Ğ1 on Ğ1/ĞDev): `transferKeepAlive` refuses any transfer that would
+  // leave the sender below it (TokenError::NotExpendable), so it isn't actually spendable.
+  const existentialDepositQuery = useQuery({
+    queryKey: ['existentialDeposit'],
+    queryFn: getExistentialDeposit,
+    staleTime: Infinity
+  });
+
   // Signs and broadcasts the transfer directly from here, using the seed already sitting in
   // `result.data` (the same `wallet` resource `address` was derived from) -- no extra fetch.
   // Throws (rather than swallowing) on a chain-level failure, e.g. insufficient balance, so
@@ -168,6 +176,7 @@ const useWallet = () => {
     hasWallet,
     tipjar: address ? parsePaytoUri(formatPaytoUri(DUNITER_NETWORK, address)) : null,
     balance: balanceQuery.data ?? null,
+    existentialDeposit: existentialDepositQuery.data ?? null,
     isLoading: query.isLoading || creating,
     creating,
     creationError,
