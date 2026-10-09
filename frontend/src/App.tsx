@@ -21,6 +21,7 @@ import { PayerPage } from './pages/PayerPage';
 import { RecevoirPage } from './pages/RecevoirPage';
 import { TransactionsPage } from './pages/TransactionsPage';
 import { ContactsPage } from './pages/ContactsPage';
+import Banner from './Banner';
 
 const antdLocale = APP_LANG === 'fr' ? frFR : enUS;
 
@@ -28,6 +29,7 @@ const App: React.FC = () => (
   <BrowserRouter>
     <ConfigProvider locale={antdLocale} theme={theme}>
       <AntdApp>
+        <Banner />
         <Refine
           authProvider={authProvider}
           dataProvider={dataProvider}

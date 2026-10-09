@@ -88,6 +88,10 @@ services:
       - backend
     expose:
       - '4000'
+    # Read when the container starts (see docker/frontend-start.sh): no rebuild needed
+    environment:
+      # Text of a closable banner shown on top of every page (empty: no banner)
+      BANNER_MESSAGE: ${BANNER_MESSAGE:-}
 
   pj-redis:
     image: redis:7-alpine
