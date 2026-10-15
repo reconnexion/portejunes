@@ -56,15 +56,13 @@ module.exports = {
         await ctx.call('pod-notifications.send', {
           template: {
             title: {
-              en: comment
-                ? `You received ${(amount / 100).toFixed(2)} Ğ1: "${comment}"`
-                : `You received ${(amount / 100).toFixed(2)} Ğ1`,
-              fr: comment
-                ? `Vous avez reçu ${(amount / 100).toFixed(2)} Ğ1 : « ${comment} »`
-                : `Vous avez reçu ${(amount / 100).toFixed(2)} Ğ1`
+              en: '{{#if comment}}You received {{{amount}}} Ğ1: "{{{comment}}}"{{else}}You received {{{amount}}} Ğ1{{/if}}',
+              fr: '{{#if comment}}Vous avez reçu {{{amount}}} Ğ1 : « {{{comment}}} »{{else}}Vous avez reçu {{{amount}}} Ğ1{{/if}}'
             }
           },
           activity,
+          amount: (amount / 100).toFixed(2),
+          comment,
           context: activity.id,
           recipientUri: actorUri
         });
