@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { fetchJson } from '@activitypods/refine-providers/utils';
+import { fetchWithSession } from '@activitypods/refine-providers/utils';
 
 import { authProvider } from '../providers';
 import { parsePaytoUri } from '../utils/payto';
@@ -17,7 +17,7 @@ const useTipjar = (actorUri?: string) => {
   return useQuery({
     queryKey: ['tipjar', actorUri],
     queryFn: async () => {
-      const { json: actor } = await fetchJson(actorUri!, {}, session?.token);
+      const { json: actor } = await fetchWithSession(actorUri!, {}, session);
       return { tipjar: parsePaytoUri(actor['foaf:tipjar']), handle: formatHandle(actor) };
     },
     enabled: !!actorUri,

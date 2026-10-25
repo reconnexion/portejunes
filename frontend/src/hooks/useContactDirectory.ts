@@ -1,6 +1,6 @@
 import { useQueries } from '@tanstack/react-query';
 import { useList as useRefineList } from '@refinedev/core';
-import { fetchJson } from '@activitypods/refine-providers/utils';
+import { fetchWithSession } from '@activitypods/refine-providers/utils';
 
 import { authProvider } from '../providers';
 import { parsePaytoUri } from '../utils/payto';
@@ -28,7 +28,7 @@ const useContactDirectory = () => {
     queries: profiles.map(profile => ({
       queryKey: ['tipjar', profile.describes],
       queryFn: async () => {
-        const { json: actor } = await fetchJson(profile.describes!, {}, session?.token);
+        const { json: actor } = await fetchWithSession(profile.describes!, {}, session);
         return { tipjar: parsePaytoUri(actor['foaf:tipjar']), handle: formatHandle(actor) };
       },
       enabled: !!profile.describes,

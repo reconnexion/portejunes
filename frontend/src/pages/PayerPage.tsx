@@ -3,7 +3,7 @@ import { useLocation, useSearchParams } from 'react-router';
 import { useList } from '@refinedev/core';
 import { Card, InputNumber, Input, Button, Space, Typography, App as AntdApp, Tag } from 'antd';
 import { SendOutlined } from '@ant-design/icons';
-import { fetchJson } from '@activitypods/refine-providers/utils';
+import { fetchWithSession } from '@activitypods/refine-providers/utils';
 
 import { authProvider } from '../providers';
 import useWallet from '../hooks/useWallet';
@@ -139,7 +139,7 @@ export const PayerPage = () => {
         destinationAddress = recipient.address;
       } else {
         const session = authProvider.getSession();
-        const { json: recipientActor } = await fetchJson(recipient.webId, {}, session?.token);
+        const { json: recipientActor } = await fetchWithSession(recipient.webId, {}, session);
         const recipientTipjar = parsePaytoUri(recipientActor['foaf:tipjar']);
         if (!recipientTipjar) throw new Error(`${recipient.name} n'a pas encore de portefeuille Ğ1.`);
         destinationAddress = recipientTipjar.address;

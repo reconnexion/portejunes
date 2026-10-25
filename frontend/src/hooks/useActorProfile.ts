@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { fetchJson } from '@activitypods/refine-providers/utils';
+import { fetchWithSession } from '@activitypods/refine-providers/utils';
 
 import { authProvider } from '../providers';
 
@@ -19,9 +19,9 @@ const useActorProfile = (actorUri?: string) => {
   return useQuery({
     queryKey: ['actor-profile', actorUri],
     queryFn: async () => {
-      const { json: actor } = await fetchJson(actorUri!, {}, session?.token);
+      const { json: actor } = await fetchWithSession(actorUri!, {}, session);
       if (!actor.url) return null;
-      const { json: profile } = await fetchJson(actor.url, {}, session?.token);
+      const { json: profile } = await fetchWithSession(actor.url, {}, session);
       return profile as ActorProfile;
     },
     enabled: !!actorUri,
